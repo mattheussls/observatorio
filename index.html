@@ -38,11 +38,6 @@
             transition: background-color 0.5s ease;
         }
 
-        #zoom-wrapper {
-            width: 100%; height: 100%; transform-origin: center center;
-            transition: transform 0.15s ease-out;
-        }
-
         #starmap { width: 100%; height: 100%; cursor: grab; }
         #starmap:active { cursor: grabbing; }
 
@@ -60,8 +55,6 @@
         }
         #settings-panel::-webkit-scrollbar { width: 6px; }
         #settings-panel::-webkit-scrollbar-thumb { background: var(--primary-glow); border-radius: 5px; }
-
-        #zoom-panel { bottom: 30px; right: 30px; width: 250px; }
 
         /* RELÓGIO DIGITAL */
         .clock-display {
@@ -98,12 +91,9 @@
         .checkbox-wrapper { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; cursor: pointer; font-size: 0.95rem; }
         .checkbox-wrapper input[type="checkbox"] { accent-color: var(--primary-glow); width: 16px; height: 16px; }
 
-        .zoom-slider { -webkit-appearance: none; width: 100%; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.1); border: 1px solid rgba(0,212,255,0.3); margin-bottom: 10px; }
-        .zoom-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--primary-glow); cursor: pointer; }
-
         .tracker-box { background: rgba(0,0,0,0.4); border: 1px dashed var(--primary-glow); border-radius: 8px; padding: 10px; margin-top: 5px; font-size: 0.9rem; }
 
-        /* --- NOVO: HUD DINÂMICO (TOPO) --- */
+        /* HUD DINÂMICO (TOPO) */
         #dynamic-hud {
             position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
             background: rgba(10, 15, 25, 0.7); backdrop-filter: blur(8px);
@@ -125,6 +115,18 @@
         .toggle-btn { display: none; width: 100%; margin-top: 15px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 10px; border-radius: 8px; font-family: 'Orbitron'; cursor: pointer; }
         #open-menu-btn { display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel-bg); border: 1px solid var(--primary-glow); color: var(--primary-glow); padding: 10px 20px; border-radius: 20px; font-family: 'Orbitron'; z-index: 999; box-shadow: 0 0 15px rgba(0,212,255,0.3); backdrop-filter: blur(5px); cursor: pointer; }
 
+        /* Holograma Clima */
+        #weather-alert {
+            position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
+            background: rgba(10, 15, 25, 0.85); backdrop-filter: blur(10px);
+            border: 1px solid var(--warn-color); border-radius: 12px; padding: 10px 20px;
+            display: flex; align-items: center; gap: 15px; z-index: 2000; opacity: 0; pointer-events: none;
+        }
+        #weather-alert.visible { opacity: 1; }
+        .w-icon { font-size: 2rem; }
+        .w-title { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: var(--warn-color); }
+        .w-desc { font-size: 0.95rem; color: #fff; }
+
         /* OTIMIZAÇÃO MOBILE EXTREMA */
         @media (max-width: 768px) {
             .lens-container { width: 100vw; height: 100vh; border-radius: 0; border: none; }
@@ -138,12 +140,11 @@
             
             .toggle-btn { display: block; }
             #open-menu-btn.visible { display: block; }
-
-            #zoom-panel { top: 75px; right: 15px; bottom: auto; width: 180px; padding: 1rem; }
             
             .clock-display { font-size: 1.5rem; margin-bottom: 10px; padding-bottom: 5px; }
-            #dynamic-hud { top: 20px; padding: 6px 15px; }
+            #dynamic-hud { top: 15px; padding: 6px 15px; }
             .hud-text { font-size: 0.9rem; }
+            #weather-alert { top: 75px; width: 90%; flex-direction: column; text-align: center; }
         }
     </style>
 </head>
@@ -154,12 +155,18 @@
         <span class="hud-text" id="hud-text">Inicializando sensores astronômicos...</span>
     </div>
 
+    <div id="weather-alert">
+        <div class="w-icon" id="w-icon">☁️</div>
+        <div>
+            <div class="w-title" id="w-title">ALERTA METEOROLÓGICO</div>
+            <div class="w-desc" id="w-desc">Condições locais podem afetar a visibilidade.</div>
+        </div>
+    </div>
+
     <button id="open-menu-btn">⚙️ CONTROLES</button>
 
     <div class="lens-container" id="lens-box">
-        <div id="zoom-wrapper">
-            <div id="starmap"></div>
-        </div>
+        <div id="starmap"></div>
     </div>
 
     <div id="settings-panel" class="ui-panel">
@@ -215,27 +222,19 @@
             <label class="control-label">GRADES E LINHAS AUXILIARES</label>
             <label class="checkbox-wrapper"><input type="checkbox" id="chk-ecliptic"><span>Linha da Eclíptica</span></label>
             <label class="checkbox-wrapper"><input type="checkbox" id="chk-equator"><span>Equador Celestial</span></label>
-            <label class="checkbox-wrapper"><input type="checkbox" id="chk-az"><span>Grade Azimutal (Horizonte)</span></label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-az" checked><span>Grade Azimutal (Horizonte)</span></label>
             <label class="checkbox-wrapper"><input type="checkbox" id="chk-gal"><span>Grade Galáctica (Via Láctea)</span></label>
         </div>
 
         <button class="toggle-btn" id="close-menu-btn">⬇ OCULTAR PAINEL</button>
     </div>
 
-    <div id="zoom-panel" class="ui-panel">
-        <label class="control-label">ZOOM ÓPTICO</label>
-        <input type="range" min="1" max="5" value="1" step="0.1" class="zoom-slider" id="zoom-slider-control">
-    </div>
-
     <script>
         // --- DADOS DINÂMICOS DO HUD ---
         let astroData = {
-            weatherDesc: "Atmosfera não analisada",
-            weatherIcon: "☁️",
-            sunStatus: "Calculando Sol...",
-            sunIcon: "☀️",
-            moonStatus: "Calculando Lua...",
-            moonIcon: "🌙",
+            weatherDesc: "Atmosfera não analisada", weatherIcon: "☁️",
+            sunStatus: "Calculando Sol...", sunIcon: "☀️",
+            moonStatus: "Calculando Lua...", moonIcon: "🌙",
             issAlert: ""
         };
 
@@ -254,7 +253,6 @@
                 messages.push({ icon: "🛰️", text: astroData.issAlert });
             }
 
-            // Animação de transição
             hudText.parentElement.classList.remove('fade-transition');
             void hudText.parentElement.offsetWidth; // Trigger reflow
             
@@ -264,25 +262,18 @@
 
             currentHudIndex = (currentHudIndex + 1) % messages.length;
         }
-        setInterval(updateHUD, 4000); // Gira a cada 4 segundos
+        setInterval(updateHUD, 4000);
 
         // Algoritmo de Fase da Lua
         function getMoonPhase() {
             const date = new Date();
-            let year = date.getFullYear();
-            let month = date.getMonth() + 1;
-            let day = date.getDate();
+            let year = date.getFullYear(); let month = date.getMonth() + 1; let day = date.getDate();
             if (month < 3) { year--; month += 12; }
-            let a = Math.floor(year / 100);
-            let b = Math.floor(a / 4);
-            let c = 2 - a + b;
-            let e = Math.floor(365.25 * (year + 4716));
-            let f = Math.floor(30.6001 * (month + 1));
+            let a = Math.floor(year / 100); let b = Math.floor(a / 4); let c = 2 - a + b;
+            let e = Math.floor(365.25 * (year + 4716)); let f = Math.floor(30.6001 * (month + 1));
             let jd = c + day + e + f - 1524.5;
-            let daysSinceNew = jd - 2451549.5;
-            let newMoons = daysSinceNew / 29.53;
-            let phase = newMoons - Math.floor(newMoons);
-            let phaseDays = phase * 29.53;
+            let daysSinceNew = jd - 2451549.5; let newMoons = daysSinceNew / 29.53;
+            let phase = newMoons - Math.floor(newMoons); let phaseDays = phase * 29.53;
 
             if (phaseDays < 1.84) return { i: "🌑", t: "Fase Atual: Lua Nova" };
             if (phaseDays < 5.53) return { i: "🌒", t: "Fase Atual: Lua Crescente" };
@@ -307,10 +298,18 @@
         setInterval(updateClock, 1000);
         updateClock();
 
-        // Lógica de Toggle Mobile
+        // Lógica de Menu Mobile (Recolhido por padrão no celular)
         const panel = document.getElementById('settings-panel');
         const openBtn = document.getElementById('open-menu-btn');
         const closeBtn = document.getElementById('close-menu-btn');
+
+        function initializeMobileMenu() {
+            if (window.innerWidth <= 768) {
+                panel.classList.add('hidden');
+                openBtn.classList.add('visible');
+            }
+        }
+        initializeMobileMenu(); // Executa na hora de carregar
 
         closeBtn.addEventListener('click', () => {
             panel.classList.add('hidden');
@@ -322,13 +321,14 @@
             openBtn.classList.remove('visible');
         });
 
-
         S(document).ready(function() {
+            // Estado Central da Aplicação com seus Defaults Perfeitos
             let mapConfig = {
                 id: 'starmap', projection: 'stereo', latitude: -1.451, longitude: -48.468, lang: 'en', 
-                mouse: true, keyboard: true, showstars: true, showplanets: true, showorbits: false,
+                mouse: true, keyboard: true, 
+                showstars: true, showplanets: true, showorbits: false,
                 constellations: true, constellationlabels: true, constellationboundaries: false,
-                ecliptic: false, gridlines_eq: false, gridlines_az: false, gridlines_gal: false, transparent: true
+                ecliptic: false, gridlines_eq: false, gridlines_az: true, gridlines_gal: false, transparent: true
             };
 
             let planetariumInstance = null;
@@ -341,38 +341,42 @@
             }
             applyChanges();
 
-            // API Meteorológica e do SOL (Open-Meteo com Sunrise/Sunset)
+            // API Meteorológica e do SOL
             async function fetchWeatherAndSun(lat, lon) {
                 const statusBox = document.getElementById('weather-status');
+                const alertBox = document.getElementById('weather-alert');
                 try {
                     statusBox.innerHTML = "Verificando satélite...";
-                    // Pegando clima + horários do sol
                     const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=sunrise,sunset&timezone=auto`);
                     const data = await res.json();
                     
-                    // Clima
                     const code = data.current_weather.weathercode;
-                    let desc = ""; let icon = "";
+                    let desc = ""; let icon = ""; let badWeather = false;
+                    
                     if (code === 0) { desc = "Céu Limpo"; icon = "☀️"; }
-                    else if (code >= 1 && code <= 3) { desc = "Nublado"; icon = "☁️"; }
-                    else if (code >= 45 && code <= 48) { desc = "Neblina"; icon = "🌫️"; }
-                    else if (code >= 51 && code <= 67) { desc = "Chuva"; icon = "🌧️"; }
-                    else if (code >= 80 && code <= 82) { desc = "Pancadas"; icon = "🌦️"; }
-                    else if (code >= 95) { desc = "Tempestade"; icon = "🌩️"; }
-                    else { desc = "Instável"; icon = "🌪️"; }
+                    else if (code >= 1 && code <= 3) { desc = "Nublado"; icon = "☁️"; badWeather = true;}
+                    else if (code >= 45 && code <= 48) { desc = "Neblina"; icon = "🌫️"; badWeather = true;}
+                    else if (code >= 51 && code <= 67) { desc = "Chuva"; icon = "🌧️"; badWeather = true;}
+                    else if (code >= 80 && code <= 82) { desc = "Pancadas"; icon = "🌦️"; badWeather = true;}
+                    else if (code >= 95) { desc = "Tempestade"; icon = "🌩️"; badWeather = true;}
+                    else { desc = "Instável"; icon = "🌪️"; badWeather = true;}
                     
                     statusBox.innerHTML = `${icon} ${desc} (${data.current_weather.temperature}°C)`;
                     astroData.weatherIcon = icon;
                     astroData.weatherDesc = `${desc} (${data.current_weather.temperature}°C)`;
 
-                    // Lógica do Sol
+                    if (badWeather) {
+                        document.getElementById('w-icon').innerText = icon;
+                        document.getElementById('w-desc').innerText = `Ops! Temos ${desc.toLowerCase()} agora. A visão pode estar prejudicada.`;
+                        alertBox.className = 'visible';
+                    } else { alertBox.className = ''; }
+
                     if(data.daily && data.daily.sunrise && data.daily.sunset) {
                         const now = new Date();
                         const sunrise = new Date(data.daily.sunrise[0]);
                         const sunset = new Date(data.daily.sunset[0]);
-                        
                         let sMsg = ""; let sIcon = "";
-                        const diffRise = (now - sunrise) / 60000; // em minutos
+                        const diffRise = (now - sunrise) / 60000;
                         const diffSet = (now - sunset) / 60000;
                         
                         if (diffRise < -60) { sMsg = "Ainda é noite. Aguardando o amanhecer."; sIcon = "🌌"; }
@@ -381,14 +385,13 @@
                         else if (diffSet >= -60 && diffSet <= 60) { sMsg = "O Sol está se pondo! Prepare-se."; sIcon = "🌇"; }
                         else { sMsg = "Noite estrelada. Ideal para observação."; sIcon = "✨"; }
 
-                        astroData.sunStatus = sMsg;
-                        astroData.sunIcon = sIcon;
+                        astroData.sunStatus = sMsg; astroData.sunIcon = sIcon;
                     }
 
                 } catch (e) { 
                     statusBox.innerHTML = "Radar offline."; 
-                    astroData.weatherDesc = "Radar offline";
-                    astroData.sunStatus = "Sem dados solares";
+                    astroData.weatherDesc = "Radar offline"; astroData.sunStatus = "Sem dados solares";
+                    alertBox.className = '';
                 }
             }
             fetchWeatherAndSun(mapConfig.latitude, mapConfig.longitude);
@@ -437,7 +440,7 @@
                         planetariumInstance.pointers = [{ ra: raRad*180/Math.PI, dec: decRad*180/Math.PI, label: '🛸 ISS', colour: 'rgba(0, 212, 255, 1)' }];
                     } else {
                         statusEl.innerHTML = `<span style="color: #8fa3b0;">OCULTA</span> (Abaixo do horizonte)`;
-                        astroData.issAlert = ""; // Remove o alerta
+                        astroData.issAlert = ""; 
                         planetariumInstance.pointers = []; 
                     }
                     planetariumInstance.draw();
@@ -479,7 +482,7 @@
                 } catch (error) {}
             });
 
-            // Checkboxes
+            // Vínculo dos Checkboxes
             const binders = [
                 { id: 'chk-stars', prop: 'showstars' },
                 { id: 'chk-planets', prop: 'showplanets' },
@@ -501,10 +504,6 @@
             });
 
             document.getElementById('bg-color-picker').addEventListener('input', function() { document.getElementById('lens-box').style.backgroundColor = this.value; });
-
-            const zoomSlider = document.getElementById('zoom-slider-control');
-            const zoomWrapper = document.getElementById('zoom-wrapper');
-            zoomSlider.addEventListener('input', function() { zoomWrapper.style.transform = `scale(${this.value})`; });
         });
     </script>
 </body>
