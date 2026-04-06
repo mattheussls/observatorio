@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Centro de Rastreio e Observatório Espacial</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://slowe.github.io/VirtualSky/stuquery.js"></script>
+    <script src="https://slowe.github.io/VirtualSky/virtualsky.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/4.1.3/satellite.min.js"></script>
+
+    <style>
+        :root {
+            --primary-glow: #00d4ff;
+            --bg-deep: #050810;
+            --panel-bg: rgba(10, 15, 25, 0.85);
+            --border-color: rgba(0, 212, 255, 0.4);
+            --text-main: #e0e6ed;
+            --warn-color: #f4d03f;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: var(--bg-deep); color: var(--text-main);
+            font-family: 'Rajdhani', sans-serif; overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
+            overscroll-behavior: none; 
+        }
+
+        /* LENTE PADRÃO (Desktop) */
+        .lens-container {
+            position: relative; width: 95vmin; height: 95vmin;
+            border-radius: 50%; border: 2px solid var(--border-color);
+            box-shadow: 0 0 60px rgba(0, 212, 255, 0.15), inset 0 0 40px rgba(0, 212, 255, 0.25);
+            overflow: hidden; background-color: #000000;
+            transition: background-color 0.5s ease;
+        }
+
+        #zoom-wrapper {
+            width: 100%; height: 100%; transform-origin: center center;
+            transition: transform 0.15s ease-out;
+        }
+
+        #starmap { width: 100%; height: 100%; cursor: grab; }
+        #starmap:active { cursor: grabbing; }
+
+        /* PAINÉIS FLUTUANTES */
+        .ui-panel {
+            position: absolute; background: var(--panel-bg); backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 12px;
+            padding: 1.5rem; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+            z-index: 1000; pointer-events: auto; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #settings-panel {
+            top: 30px; left: 30px; width: 340px;
+            max-height: 85vh; overflow-y: auto; padding-bottom: 2rem;
+        }
+        #settings-panel::-webkit-scrollbar { width: 6px; }
+        #settings-panel::-webkit-scrollbar-thumb { background: var(--primary-glow); border-radius: 5px; }
+
+        #zoom-panel { bottom: 30px; right: 30px; width: 250px; }
+
+        /* RELÓGIO DIGITAL */
+        .clock-display {
+            font-family: 'Orbitron', sans-serif; font-size: 1.8rem; color: #fff;
+            text-shadow: 0 0 10px var(--primary-glow); text-align: center;
+            margin-bottom: 15px; border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px; letter-spacing: 2px;
+        }
+        .clock-label { font-size: 0.7rem; color: #8fa3b0; letter-spacing: 1px; display: block; margin-top: -5px;}
+
+        .control-group { margin-bottom: 15px; border-bottom: 1px dashed rgba(0,212,255,0.15); padding-bottom: 10px; }
+        .control-group:last-child { border-bottom: none; }
+        .control-label { display: block; font-size: 0.95rem; color: var(--primary-glow); margin-bottom: 8px; font-weight: 600; }
+
+        input[type="text"], input[type="color"] {
+            width: 100%; background: rgba(0, 0, 0, 0.5); border: 1px solid var(--border-color);
+            color: #fff; padding: 8px; border-radius: 5px; font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem; box-sizing: border-box; outline: none;
+        }
+
+        .search-box { display: flex; gap: 5px; }
+        button.primary-btn {
+            background: var(--primary-glow); color: #000; border: none; padding: 8px 15px;
+            border-radius: 5px; cursor: pointer; font-family: 'Rajdhani', sans-serif; font-weight: bold;
+        }
+        button.primary-btn:hover { background: #ffffff; box-shadow: 0 0 10px #ffffff; }
+
+        button.gps-btn {
+            background: transparent; color: var(--primary-glow); border: 1px solid var(--primary-glow);
+            padding: 8px 10px; border-radius: 5px; cursor: pointer; font-size: 1.1rem;
+        }
+        button.gps-btn:hover { background: rgba(0, 212, 255, 0.2); }
+
+        .checkbox-wrapper { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; cursor: pointer; font-size: 0.95rem; }
+        .checkbox-wrapper input[type="checkbox"] { accent-color: var(--primary-glow); width: 16px; height: 16px; }
+
+        .zoom-slider { -webkit-appearance: none; width: 100%; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.1); border: 1px solid rgba(0,212,255,0.3); margin-bottom: 10px; }
+        .zoom-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--primary-glow); cursor: pointer; }
+
+        .tracker-box { background: rgba(0,0,0,0.4); border: 1px dashed var(--primary-glow); border-radius: 8px; padding: 10px; margin-top: 5px; font-size: 0.9rem; }
+
+        /* --- NOVO: HUD DINÂMICO (TOPO) --- */
+        #dynamic-hud {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            background: rgba(10, 15, 25, 0.7); backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 212, 255, 0.5); border-radius: 20px;
+            padding: 8px 20px; display: flex; align-items: center; gap: 10px;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.2); z-index: 2000;
+            pointer-events: none; width: max-content; max-width: 90vw;
+        }
+        .hud-icon { font-size: 1.3rem; }
+        .hud-text { font-family: 'Rajdhani', sans-serif; font-size: 1rem; color: #fff; font-weight: 600; text-align: center; }
+        
+        .fade-transition { animation: fadeInfo 0.5s ease-in-out; }
+        @keyframes fadeInfo {
+            0% { opacity: 0; transform: translateY(-5px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Botões de Toggle Mobile */
+        .toggle-btn { display: none; width: 100%; margin-top: 15px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 10px; border-radius: 8px; font-family: 'Orbitron'; cursor: pointer; }
+        #open-menu-btn { display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel-bg); border: 1px solid var(--primary-glow); color: var(--primary-glow); padding: 10px 20px; border-radius: 20px; font-family: 'Orbitron'; z-index: 999; box-shadow: 0 0 15px rgba(0,212,255,0.3); backdrop-filter: blur(5px); cursor: pointer; }
+
+        /* OTIMIZAÇÃO MOBILE EXTREMA */
+        @media (max-width: 768px) {
+            .lens-container { width: 100vw; height: 100vh; border-radius: 0; border: none; }
+            
+            #settings-panel {
+                top: auto; bottom: 0; left: 0; width: 100%; max-height: 65vh;
+                border-radius: 25px 25px 0 0; padding: 1.5rem; box-sizing: border-box;
+                border-bottom: none; border-left: none; border-right: none;
+            }
+            #settings-panel.hidden { transform: translateY(110%); } /* Oculta descendo */
+            
+            .toggle-btn { display: block; }
+            #open-menu-btn.visible { display: block; }
+
+            #zoom-panel { top: 75px; right: 15px; bottom: auto; width: 180px; padding: 1rem; }
+            
+            .clock-display { font-size: 1.5rem; margin-bottom: 10px; padding-bottom: 5px; }
+            #dynamic-hud { top: 20px; padding: 6px 15px; }
+            .hud-text { font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="dynamic-hud">
+        <span class="hud-icon" id="hud-icon">🚀</span>
+        <span class="hud-text" id="hud-text">Inicializando sensores astronômicos...</span>
+    </div>
+
+    <button id="open-menu-btn">⚙️ CONTROLES</button>
+
+    <div class="lens-container" id="lens-box">
+        <div id="zoom-wrapper">
+            <div id="starmap"></div>
+        </div>
+    </div>
+
+    <div id="settings-panel" class="ui-panel">
+        
+        <div class="clock-display" id="bsb-clock">
+            00:00:00
+            <span class="clock-label">HORÁRIO DE BRASÍLIA</span>
+        </div>
+        
+        <div class="control-group">
+            <label class="control-label">LOCALIZAÇÃO / GPS</label>
+            <div class="search-box">
+                <input type="text" id="city-input" placeholder="Ex: Belém" value="Belém">
+                <button class="gps-btn" id="btn-gps" title="Usar minha localização">📍</button>
+                <button class="primary-btn" id="btn-search">IR</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">🌤️ CLIMA LOCAL</label>
+            <div class="tracker-box" id="weather-status-box" style="border-color: #8fa3b0;">
+                <strong id="weather-status">Analisando atmosfera...</strong>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">🛰️ ESTAÇÃO ESPACIAL (ISS)</label>
+            <div class="tracker-box">
+                Status: <strong id="iss-status" style="color:#f4d03f;">Calculando...</strong>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">COR DO FUNDO</label>
+            <input type="color" id="bg-color-picker" value="#000000">
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">ASTROS E OBJETOS</label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-stars" checked><span>Mostrar Estrelas</span></label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-planets" checked><span>Mostrar Planetas</span></label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-orbits"><span>Órbitas dos Planetas</span></label>
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">CONSTELAÇÕES (Padrão IAU/Latim)</label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-const-lines" checked><span>Linhas das Constelações</span></label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-const-names" checked><span>Nomes das Constelações</span></label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-const-bounds"><span>Fronteiras das Constelações</span></label>
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">GRADES E LINHAS AUXILIARES</label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-ecliptic"><span>Linha da Eclíptica</span></label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-equator"><span>Equador Celestial</span></label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-az"><span>Grade Azimutal (Horizonte)</span></label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="chk-gal"><span>Grade Galáctica (Via Láctea)</span></label>
+        </div>
+
+        <button class="toggle-btn" id="close-menu-btn">⬇ OCULTAR PAINEL</button>
+    </div>
+
+    <div id="zoom-panel" class="ui-panel">
+        <label class="control-label">ZOOM ÓPTICO</label>
+        <input type="range" min="1" max="5" value="1" step="0.1" class="zoom-slider" id="zoom-slider-control">
+    </div>
+
+    <script>
+        // --- DADOS DINÂMICOS DO HUD ---
+        let astroData = {
+            weatherDesc: "Atmosfera não analisada",
+            weatherIcon: "☁️",
+            sunStatus: "Calculando Sol...",
+            sunIcon: "☀️",
+            moonStatus: "Calculando Lua...",
+            moonIcon: "🌙",
+            issAlert: ""
+        };
+
+        let currentHudIndex = 0;
+        
+        function updateHUD() {
+            const hudText = document.getElementById('hud-text');
+            const hudIcon = document.getElementById('hud-icon');
+            
+            let messages = [
+                { icon: astroData.weatherIcon, text: `Clima: ${astroData.weatherDesc}` },
+                { icon: astroData.sunIcon, text: astroData.sunStatus },
+                { icon: astroData.moonIcon, text: astroData.moonStatus }
+            ];
+            if (astroData.issAlert) {
+                messages.push({ icon: "🛰️", text: astroData.issAlert });
+            }
+
+            // Animação de transição
+            hudText.parentElement.classList.remove('fade-transition');
+            void hudText.parentElement.offsetWidth; // Trigger reflow
+            
+            hudIcon.innerText = messages[currentHudIndex].icon;
+            hudText.innerText = messages[currentHudIndex].text;
+            hudText.parentElement.classList.add('fade-transition');
+
+            currentHudIndex = (currentHudIndex + 1) % messages.length;
+        }
+        setInterval(updateHUD, 4000); // Gira a cada 4 segundos
+
+        // Algoritmo de Fase da Lua
+        function getMoonPhase() {
+            const date = new Date();
+            let year = date.getFullYear();
+            let month = date.getMonth() + 1;
+            let day = date.getDate();
+            if (month < 3) { year--; month += 12; }
+            let a = Math.floor(year / 100);
+            let b = Math.floor(a / 4);
+            let c = 2 - a + b;
+            let e = Math.floor(365.25 * (year + 4716));
+            let f = Math.floor(30.6001 * (month + 1));
+            let jd = c + day + e + f - 1524.5;
+            let daysSinceNew = jd - 2451549.5;
+            let newMoons = daysSinceNew / 29.53;
+            let phase = newMoons - Math.floor(newMoons);
+            let phaseDays = phase * 29.53;
+
+            if (phaseDays < 1.84) return { i: "🌑", t: "Fase Atual: Lua Nova" };
+            if (phaseDays < 5.53) return { i: "🌒", t: "Fase Atual: Lua Crescente" };
+            if (phaseDays < 9.22) return { i: "🌓", t: "Fase Atual: Quarto Crescente" };
+            if (phaseDays < 12.91) return { i: "🌔", t: "Fase Atual: Crescente Gibosa" };
+            if (phaseDays < 16.61) return { i: "🌕", t: "Fase Atual: Lua Cheia" };
+            if (phaseDays < 20.30) return { i: "🌖", t: "Fase Atual: Minguante Gibosa" };
+            if (phaseDays < 23.99) return { i: "🌗", t: "Fase Atual: Quarto Minguante" };
+            if (phaseDays < 27.68) return { i: "🌘", t: "Fase Atual: Lua Minguante" };
+            return { i: "🌑", t: "Fase Atual: Lua Nova" };
+        }
+        let moonData = getMoonPhase();
+        astroData.moonIcon = moonData.i;
+        astroData.moonStatus = moonData.t;
+
+        // Relógio BSB
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+            document.getElementById('bsb-clock').innerHTML = `${timeString} <span class="clock-label">HORÁRIO DE BRASÍLIA</span>`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Lógica de Toggle Mobile
+        const panel = document.getElementById('settings-panel');
+        const openBtn = document.getElementById('open-menu-btn');
+        const closeBtn = document.getElementById('close-menu-btn');
+
+        closeBtn.addEventListener('click', () => {
+            panel.classList.add('hidden');
+            openBtn.classList.add('visible');
+        });
+
+        openBtn.addEventListener('click', () => {
+            panel.classList.remove('hidden');
+            openBtn.classList.remove('visible');
+        });
+
+
+        S(document).ready(function() {
+            let mapConfig = {
+                id: 'starmap', projection: 'stereo', latitude: -1.451, longitude: -48.468, lang: 'en', 
+                mouse: true, keyboard: true, showstars: true, showplanets: true, showorbits: false,
+                constellations: true, constellationlabels: true, constellationboundaries: false,
+                ecliptic: false, gridlines_eq: false, gridlines_az: false, gridlines_gal: false, transparent: true
+            };
+
+            let planetariumInstance = null;
+            let issTle = null;
+
+            function applyChanges() {
+                document.getElementById('starmap').innerHTML = ''; 
+                planetariumInstance = S.virtualsky(mapConfig); 
+                updateISSPosition(); 
+            }
+            applyChanges();
+
+            // API Meteorológica e do SOL (Open-Meteo com Sunrise/Sunset)
+            async function fetchWeatherAndSun(lat, lon) {
+                const statusBox = document.getElementById('weather-status');
+                try {
+                    statusBox.innerHTML = "Verificando satélite...";
+                    // Pegando clima + horários do sol
+                    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=sunrise,sunset&timezone=auto`);
+                    const data = await res.json();
+                    
+                    // Clima
+                    const code = data.current_weather.weathercode;
+                    let desc = ""; let icon = "";
+                    if (code === 0) { desc = "Céu Limpo"; icon = "☀️"; }
+                    else if (code >= 1 && code <= 3) { desc = "Nublado"; icon = "☁️"; }
+                    else if (code >= 45 && code <= 48) { desc = "Neblina"; icon = "🌫️"; }
+                    else if (code >= 51 && code <= 67) { desc = "Chuva"; icon = "🌧️"; }
+                    else if (code >= 80 && code <= 82) { desc = "Pancadas"; icon = "🌦️"; }
+                    else if (code >= 95) { desc = "Tempestade"; icon = "🌩️"; }
+                    else { desc = "Instável"; icon = "🌪️"; }
+                    
+                    statusBox.innerHTML = `${icon} ${desc} (${data.current_weather.temperature}°C)`;
+                    astroData.weatherIcon = icon;
+                    astroData.weatherDesc = `${desc} (${data.current_weather.temperature}°C)`;
+
+                    // Lógica do Sol
+                    if(data.daily && data.daily.sunrise && data.daily.sunset) {
+                        const now = new Date();
+                        const sunrise = new Date(data.daily.sunrise[0]);
+                        const sunset = new Date(data.daily.sunset[0]);
+                        
+                        let sMsg = ""; let sIcon = "";
+                        const diffRise = (now - sunrise) / 60000; // em minutos
+                        const diffSet = (now - sunset) / 60000;
+                        
+                        if (diffRise < -60) { sMsg = "Ainda é noite. Aguardando o amanhecer."; sIcon = "🌌"; }
+                        else if (diffRise >= -60 && diffRise <= 60) { sMsg = "O Sol está nascendo! As estrelas vão sumir."; sIcon = "🌅"; }
+                        else if (diffRise > 60 && diffSet < -60) { sMsg = "Dia claro. Céu ofuscado pelo Sol."; sIcon = "☀️"; }
+                        else if (diffSet >= -60 && diffSet <= 60) { sMsg = "O Sol está se pondo! Prepare-se."; sIcon = "🌇"; }
+                        else { sMsg = "Noite estrelada. Ideal para observação."; sIcon = "✨"; }
+
+                        astroData.sunStatus = sMsg;
+                        astroData.sunIcon = sIcon;
+                    }
+
+                } catch (e) { 
+                    statusBox.innerHTML = "Radar offline."; 
+                    astroData.weatherDesc = "Radar offline";
+                    astroData.sunStatus = "Sem dados solares";
+                }
+            }
+            fetchWeatherAndSun(mapConfig.latitude, mapConfig.longitude);
+
+            // Rastreio da ISS
+            async function fetchISSTLE() {
+                try {
+                    const res = await fetch('https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=tle');
+                    if (!res.ok) throw new Error("");
+                    const text = await res.text();
+                    const lines = text.split('\n');
+                    if (lines.length >= 3) issTle = { line1: lines[1].trim(), line2: lines[2].trim() };
+                } catch (e) {
+                    try {
+                        const res2 = await fetch('https://tle.ivanstanojevic.me/api/tle/25544');
+                        const data2 = await res2.json();
+                        issTle = { line1: data2.line1, line2: data2.line2 };
+                    } catch (err2) {}
+                }
+            }
+
+            function updateISSPosition() {
+                const statusEl = document.getElementById('iss-status');
+                try {
+                    if (!issTle || typeof satellite === 'undefined') return;
+                    const satrec = satellite.twoline2satrec(issTle.line1, issTle.line2);
+                    const now = new Date();
+                    const posVel = satellite.propagate(satrec, now);
+                    if (!posVel.position) return;
+
+                    const posEci = posVel.position;
+                    const gmst = satellite.gstime(now);
+                    const obsGd = { longitude: mapConfig.longitude * Math.PI / 180, latitude: mapConfig.latitude * Math.PI / 180, height: 0.01 };
+                    
+                    const rx = posEci.x - satellite.ecfToEci(satellite.geodeticToEcf(obsGd), gmst).x;
+                    const ry = posEci.y - satellite.ecfToEci(satellite.geodeticToEcf(obsGd), gmst).y;
+                    const rz = posEci.z - satellite.ecfToEci(satellite.geodeticToEcf(obsGd), gmst).z;
+
+                    let raRad = Math.atan2(ry, rx); if (raRad < 0) raRad += 2 * Math.PI;
+                    const decRad = Math.atan2(rz, Math.sqrt(rx*rx + ry*ry));
+                    const elevation = satellite.ecfToLookAngles(obsGd, satellite.eciToEcf(posEci, gmst)).elevation * 180 / Math.PI;
+
+                    if (elevation > 0) {
+                        statusEl.innerHTML = `<span style="color: #00ff00;">VISÍVEL</span> (Elev: ${elevation.toFixed(1)}°)`;
+                        astroData.issAlert = "ISS cruzando os céus agora!";
+                        planetariumInstance.pointers = [{ ra: raRad*180/Math.PI, dec: decRad*180/Math.PI, label: '🛸 ISS', colour: 'rgba(0, 212, 255, 1)' }];
+                    } else {
+                        statusEl.innerHTML = `<span style="color: #8fa3b0;">OCULTA</span> (Abaixo do horizonte)`;
+                        astroData.issAlert = ""; // Remove o alerta
+                        planetariumInstance.pointers = []; 
+                    }
+                    planetariumInstance.draw();
+                } catch (error) {}
+            }
+
+            fetchISSTLE().then(() => { setInterval(updateISSPosition, 2000); setInterval(fetchISSTLE, 300000); });
+
+            // Busca e GPS
+            document.getElementById('btn-gps').addEventListener('click', function() {
+                if ("geolocation" in navigator) {
+                    document.getElementById('weather-status').innerHTML = "Buscando satélites GPS...";
+                    navigator.geolocation.getCurrentPosition(function(position) {
+                        mapConfig.latitude = position.coords.latitude;
+                        mapConfig.longitude = position.coords.longitude;
+                        document.getElementById('city-input').value = "Meu Local Exato";
+                        applyChanges();
+                        fetchWeatherAndSun(mapConfig.latitude, mapConfig.longitude);
+                    }, function(error) {
+                        alert("Não foi possível acessar seu GPS.");
+                        document.getElementById('weather-status').innerHTML = "Falha no GPS.";
+                    });
+                } else { alert("Seu navegador não suporta GPS."); }
+            });
+
+            document.getElementById('btn-search').addEventListener('click', async function() {
+                const city = document.getElementById('city-input').value;
+                if(!city || city === "Meu Local Exato") return;
+                document.getElementById('weather-status').innerHTML = "Localizando...";
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
+                    const data = await response.json();
+                    if(data && data.length > 0) {
+                        mapConfig.latitude = parseFloat(data[0].lat);
+                        mapConfig.longitude = parseFloat(data[0].lon);
+                        applyChanges(); 
+                        fetchWeatherAndSun(mapConfig.latitude, mapConfig.longitude);
+                    }
+                } catch (error) {}
+            });
+
+            // Checkboxes
+            const binders = [
+                { id: 'chk-stars', prop: 'showstars' },
+                { id: 'chk-planets', prop: 'showplanets' },
+                { id: 'chk-orbits', prop: 'showorbits' },
+                { id: 'chk-const-lines', prop: 'constellations' },
+                { id: 'chk-const-names', prop: 'constellationlabels' },
+                { id: 'chk-const-bounds', prop: 'constellationboundaries' },
+                { id: 'chk-ecliptic', prop: 'ecliptic' },
+                { id: 'chk-equator', prop: 'gridlines_eq' },
+                { id: 'chk-az', prop: 'gridlines_az' },
+                { id: 'chk-gal', prop: 'gridlines_gal' }
+            ];
+
+            binders.forEach(b => {
+                document.getElementById(b.id).addEventListener('change', function() {
+                    mapConfig[b.prop] = this.checked;
+                    applyChanges();
+                });
+            });
+
+            document.getElementById('bg-color-picker').addEventListener('input', function() { document.getElementById('lens-box').style.backgroundColor = this.value; });
+
+            const zoomSlider = document.getElementById('zoom-slider-control');
+            const zoomWrapper = document.getElementById('zoom-wrapper');
+            zoomSlider.addEventListener('input', function() { zoomWrapper.style.transform = `scale(${this.value})`; });
+        });
+    </script>
+</body>
+</html>
