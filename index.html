@@ -358,7 +358,7 @@
                     else if (code >= 45 && code <= 48) { desc = "Neblina"; icon = "🌫️"; badWeather = true;}
                     else if (code >= 51 && code <= 67) { desc = "Chuva"; icon = "🌧️"; badWeather = true;}
                     else if (code >= 80 && code <= 82) { desc = "Pancadas"; icon = "🌦️"; badWeather = true;}
-                    else if (code >= 95) { desc = "Bastante chuva"; icon = "🌩️"; badWeather = true;}
+                    else if (code >= 95) { desc = "Tempo fechado"; icon = "🌩️"; badWeather = true;}
                     else { desc = "Instável"; icon = "🌪️"; badWeather = true;}
                     
                     statusBox.innerHTML = `${icon} ${desc} (${data.current_weather.temperature}°C)`;
@@ -367,7 +367,7 @@
 
                     if (badWeather) {
                         document.getElementById('w-icon').innerText = icon;
-                        document.getElementById('w-desc').innerText = `Ops! Temos ${desc.toLowerCase()} agora. A visão pode estar prejudicada.`;
+                        document.getElementById('w-desc').innerText = `Ops! ${desc.toLowerCase()} agora. A visão pode estar prejudicada.`;
                         alertBox.className = 'visible';
                     } else { alertBox.className = ''; }
 
