@@ -138,7 +138,7 @@
                 border-radius: 25px 25px 0 0; padding: 1.5rem; box-sizing: border-box;
                 border-bottom: none; border-left: none; border-right: none;
             }
-            #settings-panel.hidden { transform: translateY(110%); }
+            #settings-panel.hidden { transform: translateY(110%); } /* Oculta descendo */
             
             .toggle-btn { display: block; }
             #open-menu-btn.visible { display: block; }
@@ -334,7 +334,7 @@
             let planetariumInstance = null;
             let issTle = null;
             
-            // TLE de Backup (Plano C): Garante que a ISS vai existir mesmo sem internet para a API.
+            // TLE de Backup
             const backupTLE = {
                 line1: "1 25544U 98067A   24125.54737269  .00015502  00000-0  27878-3 0  9990",
                 line2: "2 25544  51.6416 348.6536 0004990  45.0211  43.2045 15.49814670451676"
@@ -350,34 +350,41 @@
             }
             applyChanges();
 
+            // CLIMA V2 (Mais Preciso e com Ícones Dinâmicos de Dia/Noite)
             async function fetchWeatherAndSun(lat, lon) {
                 const statusBox = document.getElementById('weather-status');
                 const alertBox = document.getElementById('weather-alert');
                 try {
                     statusBox.innerHTML = "Verificando satélite...";
-                    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=sunrise,sunset&timezone=auto`);
+                    
+                    // Endpoint atualizado com 'is_day' para ícones perfeitos
+                    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day&daily=sunrise,sunset&timezone=America%2FBelem`);
                     const data = await res.json();
                     
-                    const code = data.current_weather.weathercode;
+                    const code = data.current.weather_code;
+                    const temp = data.current.temperature_2m;
+                    const isDay = data.current.is_day; // 1 (Dia), 0 (Noite)
+                    
                     let desc = ""; let icon = ""; let badWeather = false;
                     
-                    if (code === 0) { desc = "Céu Limpo"; icon = "☀️"; }
-                    else if (code >= 1 && code <= 3) { desc = "Nublado"; icon = "☁️"; badWeather = true;}
-                    else if (code >= 45 && code <= 48) { desc = "Neblina"; icon = "🌫️"; badWeather = true;}
-                    else if (code >= 51 && code <= 67) { desc = "Chuva"; icon = "🌧️"; badWeather = true;}
-                    else if (code >= 80 && code <= 82) { desc = "Pancadas"; icon = "🌦️"; badWeather = true;}
-                    else if (code >= 95) { desc = "Tempestade"; icon = "🌩️"; badWeather = true;}
-                    else { desc = "Instável"; icon = "🌪️"; badWeather = true;}
+                    if (code === 0) { desc = "Céu Limpo"; icon = isDay ? "☀️" : "🌙"; }
+                    else if (code === 1) { desc = "Quase Limpo"; icon = isDay ? "🌤️" : "🌑"; }
+                    else if (code === 2) { desc = "Parcialmente Nublado"; icon = "⛅"; badWeather = true; }
+                    else if (code === 3) { desc = "Nublado"; icon = "☁️"; badWeather = true; }
+                    else if (code >= 45 && code <= 48) { desc = "Neblina"; icon = "🌫️"; badWeather = true; }
+                    else if (code >= 51 && code <= 67) { desc = "Chuva"; icon = "🌧️"; badWeather = true; }
+                    else if (code >= 80 && code <= 82) { desc = "Pancadas"; icon = "🌦️"; badWeather = true; }
+                    else if (code >= 95) { desc = "Tempestade"; icon = "🌩️"; badWeather = true; }
+                    else { desc = "Instável"; icon = "🌪️"; badWeather = true; }
                     
-                    statusBox.innerHTML = `${icon} ${desc} (${data.current_weather.temperature}°C)`;
+                    statusBox.innerHTML = `${icon} ${desc} (${temp}°C)`;
                     astroData.weatherIcon = icon;
-                    astroData.weatherDesc = `${desc} (${data.current_weather.temperature}°C)`;
+                    astroData.weatherDesc = `${desc} (${temp}°C)`;
 
                     if (badWeather) {
                         document.getElementById('w-icon').innerText = icon;
                         document.getElementById('w-desc').innerText = `Ops! Temos ${desc.toLowerCase()} no local. A visão pode estar prejudicada.`;
                         alertBox.classList.add('visible');
-                        
                         setTimeout(() => { alertBox.classList.remove('visible'); }, 6000);
                     } else { 
                         alertBox.classList.remove('visible'); 
@@ -429,7 +436,7 @@
                     } catch (err2) {}
                 }
                 
-                // Plano C: Se falhar tudo, injeta o TLE de backup para a ISS existir no mapa.
+                // Plano C: Se falhar tudo, injeta o TLE de backup.
                 if (!issTle) issTle = backupTLE;
             }
 
@@ -467,7 +474,6 @@
                         statusEl.innerHTML = `<span style="color: var(--iss-color);">VISÍVEL NO CÉU DAQUI</span> (Elev: ${elevation.toFixed(1)}°)`;
                         astroData.issAlert = "A ISS está cruzando os céus agora!";
                         
-                        // Força a injeção do ponteiro da ISS
                         planetariumInstance.addPointer({ 
                             ra: raRad*180/Math.PI, 
                             dec: decRad*180/Math.PI, 
@@ -483,19 +489,17 @@
             }
 
             fetchISSTLE().then(() => { 
-                updateISSPosition(); // Roda a primeira vez logo em seguida
+                updateISSPosition(); 
                 setInterval(updateISSPosition, 2000); 
                 setInterval(fetchISSTLE, 300000); 
             });
 
-            // O BOTÃO DE TELETRANSPORTE PARA A ISS
+            // TELETRANSPORTE PARA A ISS
             document.getElementById('btn-find-iss').addEventListener('click', function() {
                 if (window.currentIssLat && window.currentIssLon) {
                     mapConfig.latitude = window.currentIssLat;
                     mapConfig.longitude = window.currentIssLon;
                     
-                    // PULO DO GATO: Se vamos para baixo da ISS, forçamos o mapa a olhar direto pro alto (Zênite)
-                    // Assim a ISS aparece no meio da tela imediatamente.
                     mapConfig.az = 180;
                     mapConfig.alt = 89; 
 
@@ -519,7 +523,6 @@
                     navigator.geolocation.getCurrentPosition(function(position) {
                         mapConfig.latitude = position.coords.latitude;
                         mapConfig.longitude = position.coords.longitude;
-                        // Retorna o view para o horizonte padrão
                         mapConfig.az = 180; mapConfig.alt = 30;
                         
                         document.getElementById('city-input').value = "Meu Local Exato";
@@ -543,7 +546,6 @@
                         mapConfig.latitude = parseFloat(data[0].lat);
                         mapConfig.longitude = parseFloat(data[0].lon);
                         
-                        // Retorna o view para o horizonte padrão
                         mapConfig.az = 180; mapConfig.alt = 30;
                         
                         applyChanges(); 
