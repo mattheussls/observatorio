@@ -11,6 +11,9 @@
     <script src="https://slowe.github.io/VirtualSky/virtualsky.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/4.1.3/satellite.min.js"></script>
 
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
         :root {
             --primary-glow: #00d4ff;
@@ -30,7 +33,7 @@
             overscroll-behavior: none; 
         }
 
-        /* LENTE (Desktop) */
+        /* LENTE PADRÃO (Desktop) */
         .lens-container {
             position: relative; width: 95vmin; height: 95vmin;
             border-radius: 50%; border: 2px solid var(--border-color);
@@ -57,7 +60,7 @@
         #settings-panel::-webkit-scrollbar { width: 6px; }
         #settings-panel::-webkit-scrollbar-thumb { background: var(--primary-glow); border-radius: 5px; }
 
-        /* RELÓGIO */
+        /* RELÓGIO DIGITAL */
         .clock-display {
             font-family: 'Orbitron', sans-serif; font-size: 1.8rem; color: #fff;
             text-shadow: 0 0 10px var(--primary-glow); text-align: center;
@@ -131,25 +134,34 @@
 
         /* MAGIA: ESTRELAS CADENTES */
         .shooting-star {
-            position: absolute;
-            width: 2px;
-            height: 2px;
-            background-color: #ffffff;
-            border-radius: 50%;
-            box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.8);
-            z-index: 500; /* Fica acima das constelações, mas atrás do painel */
-            pointer-events: none;
-            opacity: 0;
+            position: absolute; width: 2px; height: 2px; background-color: #ffffff;
+            border-radius: 50%; box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.8);
+            z-index: 500; pointer-events: none; opacity: 0;
         }
         .shooting-star::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            right: 100%; /* Cauda cresce para trás */
-            transform: translateY(-50%);
-            width: 70px; /* Comprimento do rastro */
-            height: 1px;
+            content: ''; position: absolute; top: 50%; right: 100%;
+            transform: translateY(-50%); width: 70px; height: 1px;
             background: linear-gradient(to left, rgba(255,255,255,0.8), transparent);
+        }
+
+        /* --- MINI-MAPA DA ISS --- */
+        #minimap-container {
+            position: absolute; bottom: 30px; right: 30px;
+            width: 320px; height: 220px; border-radius: 12px; 
+            border: 1px solid var(--border-color);
+            background: var(--panel-bg); backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+            z-index: 1000; display: flex; flex-direction: column; overflow: hidden;
+        }
+        #minimap-title {
+            font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: var(--primary-glow);
+            text-align: center; padding: 8px 0; border-bottom: 1px solid var(--border-color);
+            background: rgba(0,0,0,0.5); letter-spacing: 1px;
+        }
+        #minimap { flex: 1; width: 100%; background: #050810; }
+        .iss-minimap-icon {
+            font-size: 20px; text-align: center; line-height: 20px;
+            filter: drop-shadow(0 0 5px var(--iss-color));
         }
 
         /* OTIMIZAÇÃO MOBILE EXTREMA */
@@ -170,6 +182,9 @@
             #dynamic-hud { top: 15px; padding: 6px 15px; }
             .hud-text { font-size: 0.9rem; }
             #weather-alert { top: 75px; width: 90%; flex-direction: column; text-align: center; }
+            
+            /* Oculta o Mini-Mapa no celular para limpar a tela */
+            #minimap-container { display: none; }
         }
     </style>
 </head>
@@ -192,6 +207,11 @@
 
     <div class="lens-container" id="lens-box">
         <div id="starmap"></div>
+    </div>
+
+    <div id="minimap-container">
+        <div id="minimap-title">RADAR GLOBAL DA ISS 🛰️</div>
+        <div id="minimap"></div>
     </div>
 
     <div id="settings-panel" class="ui-panel">
@@ -345,7 +365,20 @@
         });
 
         S(document).ready(function() {
-            // Padrões do Mapa
+            // --- INICIALIZA O MINI-MAPA GLOBAL (LEAFLET) ---
+            let miniMap = L.map('minimap', { zoomControl: false, attributionControl: false }).setView([0, 0], 1);
+            
+            // Mapa Dark Theme
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                subdomains: 'abcd', maxZoom: 10
+            }).addTo(miniMap);
+
+            const issMapIcon = L.divIcon({
+                className: 'iss-minimap-icon', html: '🛰️', iconSize: [20, 20], iconAnchor: [10, 10]
+            });
+            let issMarker = L.marker([0, 0], {icon: issMapIcon}).addTo(miniMap);
+
+            // --- CONFIGURAÇÕES DO PLANETÁRIO ---
             let mapConfig = {
                 id: 'starmap', projection: 'stereo', latitude: -1.451, longitude: -48.468, lang: 'en', 
                 mouse: true, keyboard: true, 
@@ -357,7 +390,6 @@
             let planetariumInstance = null;
             let issTle = null;
             
-            // TLE de Backup
             const backupTLE = {
                 line1: "1 25544U 98067A   24125.54737269  .00015502  00000-0  27878-3 0  9990",
                 line2: "2 25544  51.6416 348.6536 0004990  45.0211  43.2045 15.49814670451676"
@@ -373,7 +405,7 @@
             }
             applyChanges();
 
-            // GERADOR DE ESTRELAS CADENTES (Meteors)
+            // ESTRELAS CADENTES
             function spawnShootingStar() {
                 const container = document.getElementById('lens-box');
                 if (!container) return;
@@ -381,40 +413,26 @@
                 const star = document.createElement('div');
                 star.classList.add('shooting-star');
 
-                // Posição inicial (em qualquer lugar da tela superior)
                 const startX = Math.random() * container.offsetWidth;
                 const startY = Math.random() * (container.offsetHeight * 0.7);
 
-                // Ângulo aleatório e distância
                 const angle = Math.random() * 360; 
-                const distance = Math.random() * 300 + 100; // Viaja de 100px a 400px
-                const duration = Math.random() * 800 + 500; // Duração: 0.5s a 1.3s
+                const distance = Math.random() * 300 + 100;
+                const duration = Math.random() * 800 + 500;
 
-                star.style.left = `${startX}px`;
-                star.style.top = `${startY}px`;
-
+                star.style.left = `${startX}px`; star.style.top = `${startY}px`;
                 container.appendChild(star);
 
-                // Animação JavaScript nativa
                 const anim = star.animate([
                     { transform: `rotate(${angle}deg) translateX(0px)`, opacity: 0 },
-                    { opacity: 1, offset: 0.1 },
-                    { opacity: 1, offset: 0.8 },
+                    { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.8 },
                     { transform: `rotate(${angle}deg) translateX(${distance}px)`, opacity: 0 }
-                ], {
-                    duration: duration,
-                    easing: 'ease-out'
-                });
+                ], { duration: duration, easing: 'ease-out' });
 
                 anim.onfinish = () => star.remove();
-
-                // Chama a próxima estrela num intervalo aleatório (3s a 9s)
-                const nextInterval = Math.random() * 6000 + 3000;
-                setTimeout(spawnShootingStar, nextInterval);
+                setTimeout(spawnShootingStar, Math.random() * 25000 + 3000);
             }
-            // Dispara a primeira estrela após 3 seg
-            setTimeout(spawnShootingStar, 3000);
-
+            setTimeout(spawnShootingStar, 4000);
 
             // CLIMA V2
             async function fetchWeatherAndSun(lat, lon) {
@@ -442,25 +460,20 @@
                     else { desc = "Instável"; icon = "🌪️"; badWeather = true; }
                     
                     statusBox.innerHTML = `${icon} ${desc} (${temp}°C)`;
-                    astroData.weatherIcon = icon;
-                    astroData.weatherDesc = `${desc} (${temp}°C)`;
+                    astroData.weatherIcon = icon; astroData.weatherDesc = `${desc} (${temp}°C)`;
 
                     if (badWeather) {
                         document.getElementById('w-icon').innerText = icon;
                         document.getElementById('w-desc').innerText = `Ops! Temos ${desc.toLowerCase()} no local. A visão pode estar prejudicada.`;
                         alertBox.classList.add('visible');
                         setTimeout(() => { alertBox.classList.remove('visible'); }, 6000);
-                    } else { 
-                        alertBox.classList.remove('visible'); 
-                    }
+                    } else { alertBox.classList.remove('visible'); }
 
                     if(data.daily && data.daily.sunrise && data.daily.sunset) {
                         const now = new Date();
-                        const sunrise = new Date(data.daily.sunrise[0]);
-                        const sunset = new Date(data.daily.sunset[0]);
+                        const sunrise = new Date(data.daily.sunrise[0]); const sunset = new Date(data.daily.sunset[0]);
                         let sMsg = ""; let sIcon = "";
-                        const diffRise = (now - sunrise) / 60000;
-                        const diffSet = (now - sunset) / 60000;
+                        const diffRise = (now - sunrise) / 60000; const diffSet = (now - sunset) / 60000;
                         
                         if (diffRise < -60) { sMsg = "Ainda é noite. Aguardando o amanhecer."; sIcon = "🌌"; }
                         else if (diffRise >= -60 && diffRise <= 60) { sMsg = "O Sol está nascendo! As estrelas vão sumir."; sIcon = "🌅"; }
@@ -485,18 +498,12 @@
                     if (!res.ok) throw new Error("");
                     const text = await res.text();
                     const lines = text.split('\n');
-                    if (lines.length >= 3) {
-                        issTle = { line1: lines[1].trim(), line2: lines[2].trim() };
-                        return;
-                    }
+                    if (lines.length >= 3) { issTle = { line1: lines[1].trim(), line2: lines[2].trim() }; return; }
                 } catch (e) {
                     try {
                         const res2 = await fetch('https://tle.ivanstanojevic.me/api/tle/25544');
                         const data2 = await res2.json();
-                        if (data2.line1) {
-                            issTle = { line1: data2.line1, line2: data2.line2 };
-                            return;
-                        }
+                        if (data2.line1) { issTle = { line1: data2.line1, line2: data2.line2 }; return; }
                     } catch (err2) {}
                 }
                 if (!issTle) issTle = backupTLE;
@@ -519,8 +526,13 @@
                     window.currentIssLat = satellite.degreesLat(positionGd.latitude);
                     window.currentIssLon = satellite.degreesLong(positionGd.longitude);
 
+                    // --- ATUALIZA O MINI-MAPA GLOBAL ---
+                    if (miniMap && issMarker && window.currentIssLat && window.currentIssLon) {
+                        issMarker.setLatLng([window.currentIssLat, window.currentIssLon]);
+                        miniMap.setView([window.currentIssLat, window.currentIssLon]);
+                    }
+
                     const obsGd = { longitude: mapConfig.longitude * Math.PI / 180, latitude: mapConfig.latitude * Math.PI / 180, height: 0.01 };
-                    
                     const rx = posEci.x - satellite.ecfToEci(satellite.geodeticToEcf(obsGd), gmst).x;
                     const ry = posEci.y - satellite.ecfToEci(satellite.geodeticToEcf(obsGd), gmst).y;
                     const rz = posEci.z - satellite.ecfToEci(satellite.geodeticToEcf(obsGd), gmst).z;
@@ -534,13 +546,7 @@
                     if (elevation > 0) {
                         statusEl.innerHTML = `<span style="color: var(--iss-color);">VISÍVEL NO CÉU DAQUI</span> (Elev: ${elevation.toFixed(1)}°)`;
                         astroData.issAlert = "A ISS está cruzando os céus agora!";
-                        
-                        planetariumInstance.addPointer({ 
-                            ra: raRad*180/Math.PI, 
-                            dec: decRad*180/Math.PI, 
-                            label: '🟢 ISS AQUI', 
-                            colour: '#00ff88' 
-                        });
+                        planetariumInstance.addPointer({ ra: raRad*180/Math.PI, dec: decRad*180/Math.PI, label: '🛰️ ', colour: '#00ff88' });
                     } else {
                         statusEl.innerHTML = `<span style="color: #8fa3b0;">OCULTA</span> (No outro lado do mundo)`;
                         astroData.issAlert = ""; 
@@ -550,9 +556,7 @@
             }
 
             fetchISSTLE().then(() => { 
-                updateISSPosition(); 
-                setInterval(updateISSPosition, 2000); 
-                setInterval(fetchISSTLE, 300000); 
+                updateISSPosition(); setInterval(updateISSPosition, 2000); setInterval(fetchISSTLE, 300000); 
             });
 
             // TELETRANSPORTE PARA A ISS
@@ -560,21 +564,14 @@
                 if (window.currentIssLat && window.currentIssLon) {
                     mapConfig.latitude = window.currentIssLat;
                     mapConfig.longitude = window.currentIssLon;
-                    
-                    mapConfig.az = 180;
-                    mapConfig.alt = 89; 
+                    mapConfig.az = 180; mapConfig.alt = 89; 
 
                     document.getElementById('city-input').value = "Observando a ISS";
                     applyChanges();
                     fetchWeatherAndSun(mapConfig.latitude, mapConfig.longitude);
                     
-                    if (window.innerWidth <= 768) {
-                        panel.classList.add('hidden');
-                        openBtn.classList.add('visible');
-                    }
-                } else {
-                    alert("Ainda calculando a órbita. Tente novamente em 2 segundos.");
-                }
+                    if (window.innerWidth <= 768) { panel.classList.add('hidden'); openBtn.classList.add('visible'); }
+                } else { alert("Ainda calculando a órbita. Tente novamente em 2 segundos."); }
             });
 
             // Busca e GPS
@@ -585,13 +582,10 @@
                         mapConfig.latitude = position.coords.latitude;
                         mapConfig.longitude = position.coords.longitude;
                         mapConfig.az = 180; mapConfig.alt = 30;
-                        
                         document.getElementById('city-input').value = "Meu Local Exato";
-                        applyChanges();
-                        fetchWeatherAndSun(mapConfig.latitude, mapConfig.longitude);
+                        applyChanges(); fetchWeatherAndSun(mapConfig.latitude, mapConfig.longitude);
                     }, function(error) {
-                        alert("Não foi possível acessar seu GPS.");
-                        document.getElementById('weather-status').innerHTML = "Falha no GPS.";
+                        alert("Não foi possível acessar seu GPS."); document.getElementById('weather-status').innerHTML = "Falha no GPS.";
                     });
                 } else { alert("Seu navegador não suporta GPS."); }
             });
@@ -606,33 +600,23 @@
                     if(data && data.length > 0) {
                         mapConfig.latitude = parseFloat(data[0].lat);
                         mapConfig.longitude = parseFloat(data[0].lon);
-                        
                         mapConfig.az = 180; mapConfig.alt = 30;
-                        
-                        applyChanges(); 
-                        fetchWeatherAndSun(mapConfig.latitude, mapConfig.longitude);
+                        applyChanges(); fetchWeatherAndSun(mapConfig.latitude, mapConfig.longitude);
                     }
                 } catch (error) {}
             });
 
             // Vínculo dos Checkboxes
             const binders = [
-                { id: 'chk-stars', prop: 'showstars' },
-                { id: 'chk-planets', prop: 'showplanets' },
-                { id: 'chk-orbits', prop: 'showorbits' },
-                { id: 'chk-const-lines', prop: 'constellations' },
-                { id: 'chk-const-names', prop: 'constellationlabels' },
-                { id: 'chk-const-bounds', prop: 'constellationboundaries' },
-                { id: 'chk-ecliptic', prop: 'ecliptic' },
-                { id: 'chk-equator', prop: 'gridlines_eq' },
-                { id: 'chk-az', prop: 'gridlines_az' },
-                { id: 'chk-gal', prop: 'gridlines_gal' }
+                { id: 'chk-stars', prop: 'showstars' }, { id: 'chk-planets', prop: 'showplanets' }, { id: 'chk-orbits', prop: 'showorbits' },
+                { id: 'chk-const-lines', prop: 'constellations' }, { id: 'chk-const-names', prop: 'constellationlabels' },
+                { id: 'chk-const-bounds', prop: 'constellationboundaries' }, { id: 'chk-ecliptic', prop: 'ecliptic' },
+                { id: 'chk-equator', prop: 'gridlines_eq' }, { id: 'chk-az', prop: 'gridlines_az' }, { id: 'chk-gal', prop: 'gridlines_gal' }
             ];
 
             binders.forEach(b => {
                 document.getElementById(b.id).addEventListener('change', function() {
-                    mapConfig[b.prop] = this.checked;
-                    applyChanges();
+                    mapConfig[b.prop] = this.checked; applyChanges();
                 });
             });
 
