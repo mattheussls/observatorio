@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Módulo Orbital | NASA 3D Model</title>
+    <title>Módulo Orbital | Earth 3D</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
 
-    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <style>
         :root {
@@ -33,22 +34,14 @@
             z-index: 0; /* Fica atrás de tudo */
         }
 
-        /* O Motor 3D da NASA ocupa a tela toda */
+        /* O Canvas 3D na frente das estrelas */
         #canvas-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            z-index: 1; /* Fica na frente das estrelas */
+            z-index: 1; cursor: grab;
         }
+        #canvas-container:active { cursor: grabbing; }
 
-        model-viewer {
-            width: 100%; height: 100%;
-            --poster-color: transparent;
-            /* DEIXAMOS TRANSPARENTE PARA VER AS ESTRELAS ATRÁS */
-            background-color: transparent;
-            --progress-bar-color: transparent;
-            --progress-mask: transparent;
-        }
-
-        /* --- TELA DE CARREGAMENTO NOSSA --- */
+        /* --- TELA DE CARREGAMENTO --- */
         #telescope-loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; z-index: 9999; display: flex; flex-direction: column;
@@ -83,6 +76,7 @@
             border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 12px;
             padding: 1.5rem; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.9);
             z-index: 1000; pointer-events: auto;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         #earth-data-panel { top: 30px; left: 30px; width: 330px; }
@@ -121,6 +115,23 @@
             background: var(--primary-glow); color: #000; box-shadow: 0 0 15px var(--primary-glow);
         }
 
+        /* --- BOTÕES DE TOGGLE (GAVETA MOBILE) --- */
+        .toggle-btn { 
+            display: none; width: 100%; margin-top: 15px; background: rgba(255,255,255,0.1); 
+            color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 10px; 
+            border-radius: 8px; font-family: 'Orbitron'; cursor: pointer; transition: 0.3s;
+        }
+        .toggle-btn:hover { background: rgba(255,255,255,0.2); }
+        
+        #open-menu-btn { 
+            display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
+            background: var(--panel-bg); border: 1px solid var(--primary-glow); color: var(--primary-glow); 
+            padding: 10px 20px; border-radius: 20px; font-family: 'Orbitron'; z-index: 999; 
+            box-shadow: 0 0 15px rgba(0,212,255,0.3); backdrop-filter: blur(5px); cursor: pointer; transition: 0.3s;
+        }
+        #open-menu-btn:hover { background: var(--primary-glow); color: #000; }
+        #open-menu-btn.visible { display: block; }
+
         .controls-hint {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(0,212,255,0.2);
@@ -130,12 +141,17 @@
             backdrop-filter: blur(5px);
         }
 
+        /* OTIMIZAÇÃO MOBILE EXTREMA */
         @media (max-width: 768px) {
             #earth-data-panel {
                 top: auto; bottom: 0; left: 0; width: 100%;
                 border-radius: 25px 25px 0 0; padding: 1.5rem; box-sizing: border-box;
                 border-bottom: none; border-left: none; border-right: none;
             }
+            /* Oculta o painel descendo ele pela tela */
+            #earth-data-panel.hidden { transform: translateY(110%); }
+            
+            .toggle-btn { display: block; }
             .controls-hint { top: 20px; bottom: auto; width: max-content; }
         }
     </style>
@@ -147,25 +163,12 @@
     <div id="telescope-loading">
         <div class="reticle"></div>
         <div class="loading-text">CONECTANDO AO MÓDULO ORBITAL</div>
-        <div class="loading-sub">SINCRONIZANDO COM A BASE DE DADOS DA NASA...</div>
+        <div class="loading-sub">SINCRONIZANDO SENSORES 3D...</div>
     </div>
 
-    <div id="canvas-container">
-        <model-viewer 
-            id="nasa-earth"
-            alt="A 3D model of Earth"
-            src="https://solarsystem.nasa.gov/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBaTBSIiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--7c1183d35fdc9e4b5143c8601376552b89b5d99f/Earth_1_12756.glb?disposition=inline"
-            ios-src="https://solarsystem.nasa.gov/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBaTRSIiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--46a65f6d8e039fc33416575466a91c03d137e4cd/Earth_1_12756.usdz"
-            camera-controls
-            auto-rotate
-            rotation-per-second="1deg"
-            interaction-prompt="none"
-            shadow-intensity="1"
-            exposure="1.2"
-            min-camera-orbit="auto auto 150%" 
-            max-camera-orbit="auto auto 400%">
-        </model-viewer>
-    </div>
+    <button id="open-menu-btn">⚙️ TELEMETRIA</button>
+
+    <div id="canvas-container"></div>
 
     <div id="earth-data-panel" class="ui-panel">
         
@@ -187,7 +190,7 @@
         
         <div class="data-row">
             <span class="data-label">RENDERIZAÇÃO</span>
-            <span class="data-value" style="color: #00ffaa;">NASA GLB ENGINE</span>
+            <span class="data-value" style="color: #00ffaa;">THREE.JS ENGINE</span>
         </div>
         
         <div class="data-row">
@@ -200,7 +203,9 @@
             <span class="data-value">EM ÓRBITA</span>
         </div>
 
-        <button class="btn-back" onclick="window.location.href='index.html'">⬅ RETORNAR PARA A TERRA</button>
+        <button class="btn-back" onclick="window.location.href='index.html'">⬅ RETORNAR À SUPERFÍCIE</button>
+        
+        <button class="toggle-btn" id="close-menu-btn">⬇ OCULTAR PAINEL</button>
     </div>
 
     <div class="controls-hint">
@@ -210,6 +215,29 @@
     </div>
 
     <script>
+        // --- 0. LÓGICA DE GAVETA PARA MOBILE ---
+        const panel = document.getElementById('earth-data-panel');
+        const openBtn = document.getElementById('open-menu-btn');
+        const closeBtn = document.getElementById('close-menu-btn');
+
+        function initializeMobileMenu() {
+            if (window.innerWidth <= 768) {
+                panel.classList.add('hidden');
+                openBtn.classList.add('visible');
+            }
+        }
+        initializeMobileMenu(); 
+
+        closeBtn.addEventListener('click', () => {
+            panel.classList.add('hidden');
+            openBtn.classList.add('visible');
+        });
+
+        openBtn.addEventListener('click', () => {
+            panel.classList.remove('hidden');
+            openBtn.classList.remove('visible');
+        });
+
         // --- 1. GERADOR DE ESTRELAS DE FUNDO ---
         const canvas = document.getElementById('starfield');
         const ctx = canvas.getContext('2d');
@@ -221,14 +249,12 @@
             width = canvas.width = window.innerWidth;
             height = canvas.height = window.innerHeight;
             stars.length = 0;
-            // Cria 800 estrelas aleatórias
             for(let i = 0; i < 800; i++) {
                 stars.push({
                     x: Math.random() * width,
                     y: Math.random() * height,
                     radius: Math.random() * 1.5,
                     alpha: Math.random(),
-                    // Velocidade de cintilação
                     dAlpha: (Math.random() - 0.5) * 0.02 
                 });
             }
@@ -237,7 +263,6 @@
         function drawStars() {
             ctx.clearRect(0, 0, width, height);
             stars.forEach(s => {
-                // Faz a estrela pulsar (cintilar)
                 s.alpha += s.dAlpha;
                 if(s.alpha <= 0 || s.alpha >= 1) s.dAlpha = -s.dAlpha;
                 
@@ -251,40 +276,117 @@
 
         initStars();
         drawStars();
-
         window.addEventListener('resize', initStars);
 
         // --- 2. RELÓGIO DE MISSÃO (UTC) ---
         function updateClock() {
             const now = new Date();
-            // Como estamos no espaço, usamos UTC (Padrão espacial)
             const timeString = now.toLocaleTimeString('en-GB', { timeZone: 'UTC' });
             document.getElementById('bsb-clock').innerHTML = `${timeString} <span class="clock-label">TEMPO DE MISSÃO (UTC)</span>`;
         }
         setInterval(updateClock, 1000);
         updateClock();
 
-        // --- 3. CONTROLE DO MODELO DA NASA ---
-        const modelViewer = document.getElementById('nasa-earth');
-        const loadingScreen = document.getElementById('telescope-loading');
+        // --- 3. MOTOR 3D: THREE.JS (À prova de Vercel/CORS) ---
+        const container3D = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5; 
 
-        // Quando o modelo 3D estiver 100% carregado
-        modelViewer.addEventListener('load', () => {
-            setTimeout(() => {
-                loadingScreen.style.opacity = '0';
+        // Alpha: true deixa o fundo transparente para ver o canvas 2D de estrelas
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container3D.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enablePan = false; 
+        controls.enableDamping = true; 
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 2.0; 
+        controls.maxDistance = 10;  
+
+        // Iluminação
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.1); 
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.position.set(5, 3, 5); 
+        scene.add(sunLight);
+
+        // Criação da Terra
+        let earth;
+        let atmosphere;
+        const textureLoader = new THREE.TextureLoader();
+        // A linha que salva vidas no Vercel:
+        textureLoader.setCrossOrigin('anonymous');
+        
+        // Textura segura e liberada via CDN Unpkg
+        const textureUrl = 'https://unpkg.com/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg';
+
+        textureLoader.load(
+            textureUrl,
+            function (texture) {
+                // Esfera Principal
+                const geometry = new THREE.SphereGeometry(1.5, 64, 64);
+                const material = new THREE.MeshStandardMaterial({
+                    map: texture,
+                    roughness: 0.6,
+                    metalness: 0.1  
+                });
+
+                earth = new THREE.Mesh(geometry, material);
+                earth.rotation.z = 23.5 * Math.PI / 180; // Inclinação da terra
+                scene.add(earth);
+
+                // Atmosfera (Glow Azul)
+                const atmosGeometry = new THREE.SphereGeometry(1.53, 64, 64);
+                const atmosMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x00d4ff, 
+                    transparent: true,
+                    opacity: 0.15,
+                    blending: THREE.AdditiveBlending,
+                    side: THREE.BackSide 
+                });
+                
+                atmosphere = new THREE.Mesh(atmosGeometry, atmosMaterial);
+                scene.add(atmosphere);
+
+                // Remove o Loading
                 setTimeout(() => {
-                    loadingScreen.style.display = 'none';
-                }, 800);
-            }, 500);
+                    const loadingScreen = document.getElementById('telescope-loading');
+                    loadingScreen.style.opacity = '0';
+                    setTimeout(() => loadingScreen.style.display = 'none', 800);
+                }, 1000);
+            },
+            undefined,
+            function (err) {
+                document.querySelector('.loading-text').innerText = "FALHA NA CONEXÃO DE DADOS";
+                document.querySelector('.loading-text').style.color = "red";
+                document.querySelector('.reticle').style.borderColor = "red";
+                document.querySelector('.loading-sub').innerText = "Verifique sua rede.";
+            }
+        );
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Caso a rede caia e o modelo não carregue
-        modelViewer.addEventListener('error', () => {
-            document.querySelector('.loading-text').innerText = "FALHA DE CONEXÃO COM A NASA";
-            document.querySelector('.loading-text').style.color = "red";
-            document.querySelector('.reticle').style.borderColor = "red";
-            document.querySelector('.loading-sub').innerText = "Verifique sua conexão.";
-        });
+        function animate() {
+            requestAnimationFrame(animate);
+            if (earth) {
+                earth.rotation.y += 0.0005; // Rotação do planeta
+            }
+            if (atmosphere) {
+                atmosphere.rotation.y += 0.0006; // Atmosfera gira um tiquinho mais rápido
+            }
+            controls.update(); 
+            renderer.render(scene, camera);
+        }
+        animate();
     </script>
 </body>
 </html>

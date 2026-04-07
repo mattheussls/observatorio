@@ -64,12 +64,13 @@
         }
         @keyframes pulseText { 0% { opacity: 0.6; } 100% { opacity: 1; } }
 
-        /* --- PAINÉIS FLUTUANTES (Mesmo estilo do mapa estelar) --- */
+        /* --- PAINÉIS FLUTUANTES --- */
         .ui-panel {
             position: absolute; background: var(--panel-bg); backdrop-filter: blur(12px);
             border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 12px;
             padding: 1.5rem; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
             z-index: 1000; pointer-events: auto;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); /* Animação do painel */
         }
 
         #moon-data-panel { top: 30px; left: 30px; width: 320px; }
@@ -103,6 +104,23 @@
             background: var(--primary-glow); color: #000; box-shadow: 0 0 15px var(--primary-glow);
         }
 
+        /* --- BOTÕES DO MENU MOBILE --- */
+        .toggle-btn { 
+            display: none; width: 100%; margin-top: 15px; background: rgba(255,255,255,0.1); 
+            color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 10px; 
+            border-radius: 8px; font-family: 'Orbitron'; cursor: pointer; transition: 0.3s;
+        }
+        .toggle-btn:hover { background: rgba(255,255,255,0.2); }
+        
+        #open-menu-btn { 
+            display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
+            background: var(--panel-bg); border: 1px solid var(--primary-glow); color: var(--primary-glow); 
+            padding: 10px 20px; border-radius: 20px; font-family: 'Orbitron'; z-index: 999; 
+            box-shadow: 0 0 15px rgba(0,212,255,0.3); backdrop-filter: blur(5px); cursor: pointer; transition: 0.3s;
+        }
+        #open-menu-btn:hover { background: var(--primary-glow); color: #000; }
+        #open-menu-btn.visible { display: block; }
+
         /* Controles / Dicas */
         .controls-hint {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
@@ -120,6 +138,9 @@
                 border-radius: 25px 25px 0 0; padding: 1.5rem; box-sizing: border-box;
                 border-bottom: none; border-left: none; border-right: none;
             }
+            #moon-data-panel.hidden { transform: translateY(110%); }
+            
+            .toggle-btn { display: block; }
             .controls-hint { top: 20px; bottom: auto; width: max-content; }
         }
     </style>
@@ -131,6 +152,8 @@
         <div class="loading-text">AJUSTANDO TELESCÓPIO</div>
         <div class="loading-sub">CALIBRANDO LENTES PARA O ALVO: LUA...</div>
     </div>
+
+    <button id="open-menu-btn">⚙️ TELEMETRIA</button>
 
     <div id="canvas-container"></div>
 
@@ -162,6 +185,8 @@
         </div>
 
         <button class="btn-back" onclick="window.location.href='index.html'">⬅ VOLTAR AO MAPA ESTELAR</button>
+        
+        <button class="toggle-btn" id="close-menu-btn">⬇ OCULTAR PAINEL</button>
     </div>
 
     <div class="controls-hint">
@@ -171,6 +196,30 @@
     </div>
 
     <script>
+        // --- 0. LÓGICA DO MENU RETRÁTIL PARA CELULAR ---
+        const panel = document.getElementById('moon-data-panel');
+        const openBtn = document.getElementById('open-menu-btn');
+        const closeBtn = document.getElementById('close-menu-btn');
+
+        function initializeMobileMenu() {
+            if (window.innerWidth <= 768) {
+                panel.classList.add('hidden');
+                openBtn.classList.add('visible');
+            }
+        }
+        initializeMobileMenu(); 
+
+        closeBtn.addEventListener('click', () => {
+            panel.classList.add('hidden');
+            openBtn.classList.add('visible');
+        });
+
+        openBtn.addEventListener('click', () => {
+            panel.classList.remove('hidden');
+            openBtn.classList.remove('visible');
+        });
+
+
         // --- 1. MATEMÁTICA ASTRONÔMICA: CÁLCULO DA FASE DA LUA EM TEMPO REAL ---
         function calculateMoonData() {
             const now = new Date();
