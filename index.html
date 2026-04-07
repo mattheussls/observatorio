@@ -129,6 +129,29 @@
         .w-title { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: var(--warn-color); }
         .w-desc { font-size: 0.95rem; color: #fff; }
 
+        /* MAGIA: ESTRELAS CADENTES */
+        .shooting-star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.8);
+            z-index: 500; /* Fica acima das constelações, mas atrás do painel */
+            pointer-events: none;
+            opacity: 0;
+        }
+        .shooting-star::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: 100%; /* Cauda cresce para trás */
+            transform: translateY(-50%);
+            width: 70px; /* Comprimento do rastro */
+            height: 1px;
+            background: linear-gradient(to left, rgba(255,255,255,0.8), transparent);
+        }
+
         /* OTIMIZAÇÃO MOBILE EXTREMA */
         @media (max-width: 768px) {
             .lens-container { width: 100vw; height: 100vh; border-radius: 0; border: none; }
@@ -138,7 +161,7 @@
                 border-radius: 25px 25px 0 0; padding: 1.5rem; box-sizing: border-box;
                 border-bottom: none; border-left: none; border-right: none;
             }
-            #settings-panel.hidden { transform: translateY(110%); } /* Oculta descendo */
+            #settings-panel.hidden { transform: translateY(110%); }
             
             .toggle-btn { display: block; }
             #open-menu-btn.visible { display: block; }
@@ -350,20 +373,61 @@
             }
             applyChanges();
 
-            // CLIMA V2 (Mais Preciso e com Ícones Dinâmicos de Dia/Noite)
+            // GERADOR DE ESTRELAS CADENTES (Meteors)
+            function spawnShootingStar() {
+                const container = document.getElementById('lens-box');
+                if (!container) return;
+
+                const star = document.createElement('div');
+                star.classList.add('shooting-star');
+
+                // Posição inicial (em qualquer lugar da tela superior)
+                const startX = Math.random() * container.offsetWidth;
+                const startY = Math.random() * (container.offsetHeight * 0.7);
+
+                // Ângulo aleatório e distância
+                const angle = Math.random() * 360; 
+                const distance = Math.random() * 300 + 100; // Viaja de 100px a 400px
+                const duration = Math.random() * 800 + 500; // Duração: 0.5s a 1.3s
+
+                star.style.left = `${startX}px`;
+                star.style.top = `${startY}px`;
+
+                container.appendChild(star);
+
+                // Animação JavaScript nativa
+                const anim = star.animate([
+                    { transform: `rotate(${angle}deg) translateX(0px)`, opacity: 0 },
+                    { opacity: 1, offset: 0.1 },
+                    { opacity: 1, offset: 0.8 },
+                    { transform: `rotate(${angle}deg) translateX(${distance}px)`, opacity: 0 }
+                ], {
+                    duration: duration,
+                    easing: 'ease-out'
+                });
+
+                anim.onfinish = () => star.remove();
+
+                // Chama a próxima estrela num intervalo aleatório (3s a 9s)
+                const nextInterval = Math.random() * 6000 + 3000;
+                setTimeout(spawnShootingStar, nextInterval);
+            }
+            // Dispara a primeira estrela após 3 seg
+            setTimeout(spawnShootingStar, 3000);
+
+
+            // CLIMA V2
             async function fetchWeatherAndSun(lat, lon) {
                 const statusBox = document.getElementById('weather-status');
                 const alertBox = document.getElementById('weather-alert');
                 try {
                     statusBox.innerHTML = "Verificando satélite...";
-                    
-                    // Endpoint atualizado com 'is_day' para ícones perfeitos
                     const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day&daily=sunrise,sunset&timezone=America%2FBelem`);
                     const data = await res.json();
                     
                     const code = data.current.weather_code;
                     const temp = data.current.temperature_2m;
-                    const isDay = data.current.is_day; // 1 (Dia), 0 (Noite)
+                    const isDay = data.current.is_day; 
                     
                     let desc = ""; let icon = ""; let badWeather = false;
                     
@@ -435,8 +499,6 @@
                         }
                     } catch (err2) {}
                 }
-                
-                // Plano C: Se falhar tudo, injeta o TLE de backup.
                 if (!issTle) issTle = backupTLE;
             }
 
@@ -453,7 +515,6 @@
                     const posEci = posVel.position;
                     const gmst = satellite.gstime(now);
                     
-                    // Salva as coordenadas globais da ISS
                     const positionGd = satellite.eciToGeodetic(posEci, gmst);
                     window.currentIssLat = satellite.degreesLat(positionGd.latitude);
                     window.currentIssLon = satellite.degreesLong(positionGd.longitude);
@@ -468,7 +529,7 @@
                     const decRad = Math.atan2(rz, Math.sqrt(rx*rx + ry*ry));
                     const elevation = satellite.ecfToLookAngles(obsGd, satellite.eciToEcf(posEci, gmst)).elevation * 180 / Math.PI;
 
-                    planetariumInstance.pointers = []; // Limpa o ponteiro antigo
+                    planetariumInstance.pointers = []; 
                     
                     if (elevation > 0) {
                         statusEl.innerHTML = `<span style="color: var(--iss-color);">VISÍVEL NO CÉU DAQUI</span> (Elev: ${elevation.toFixed(1)}°)`;
