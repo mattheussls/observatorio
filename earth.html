@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Módulo Orbital | NASA 3D Model</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+
+    <style>
+        :root {
+            --primary-glow: #00d4ff; 
+            --bg-deep: #000000;
+            --panel-bg: rgba(10, 15, 25, 0.85);
+            --border-color: rgba(0, 212, 255, 0.4);
+            --text-main: #e0e6ed;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: var(--bg-deep); color: var(--text-main);
+            font-family: 'Rajdhani', sans-serif; overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
+            overscroll-behavior: none; user-select: none;
+        }
+
+        /* --- O CÉU ESTRELADO DE FUNDO --- */
+        #starfield {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; /* Fica atrás de tudo */
+        }
+
+        /* O Motor 3D da NASA ocupa a tela toda */
+        #canvas-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            z-index: 1; /* Fica na frente das estrelas */
+        }
+
+        model-viewer {
+            width: 100%; height: 100%;
+            --poster-color: transparent;
+            /* DEIXAMOS TRANSPARENTE PARA VER AS ESTRELAS ATRÁS */
+            background-color: transparent;
+            --progress-bar-color: transparent;
+            --progress-mask: transparent;
+        }
+
+        /* --- TELA DE CARREGAMENTO NOSSA --- */
+        #telescope-loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; transition: opacity 0.8s ease-out;
+        }
+        .reticle {
+            width: 80px; height: 80px; border: 2px dashed var(--primary-glow);
+            border-radius: 50%; position: relative; animation: spinReticle 4s linear infinite;
+            margin-bottom: 20px; box-shadow: 0 0 25px rgba(0,212,255,0.3);
+        }
+        .reticle::before, .reticle::after {
+            content: ''; position: absolute; background: var(--primary-glow);
+        }
+        .reticle::before { top: -10px; bottom: -10px; left: 50%; width: 2px; transform: translateX(-50%); }
+        .reticle::after { left: -10px; right: -10px; top: 50%; height: 2px; transform: translateY(-50%); }
+        
+        @keyframes spinReticle { 100% { transform: rotate(360deg); } }
+
+        .loading-text {
+            font-family: 'Orbitron', sans-serif; font-size: 1.2rem; color: var(--primary-glow);
+            letter-spacing: 3px; text-shadow: 0 0 15px var(--primary-glow);
+            animation: pulseText 1.5s infinite alternate; text-align: center;
+        }
+        .loading-sub {
+            font-size: 0.9rem; color: #8fa3b0; margin-top: 10px; letter-spacing: 1px;
+        }
+        @keyframes pulseText { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        /* --- PAINÉIS FLUTUANTES --- */
+        .ui-panel {
+            position: absolute; background: var(--panel-bg); backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 12px;
+            padding: 1.5rem; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.9);
+            z-index: 1000; pointer-events: auto;
+        }
+
+        #earth-data-panel { top: 30px; left: 30px; width: 330px; }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif; font-size: 1.4rem; margin: 0 0 5px 0;
+            color: #fff; text-shadow: 0 0 10px var(--primary-glow); letter-spacing: 1px;
+        }
+        h2 {
+            font-size: 0.9rem; color: var(--primary-glow); margin: 0 0 15px 0;
+            letter-spacing: 2px; border-bottom: 1px dashed rgba(0,212,255,0.3); padding-bottom: 10px;
+        }
+
+        .data-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px; font-size: 1.05rem;
+        }
+        .data-label { color: #8fa3b0; font-weight: 600; letter-spacing: 0.5px; }
+        .data-value { color: #ffffff; text-shadow: 0 0 5px rgba(255,255,255,0.3); font-family: 'Orbitron', sans-serif; font-size: 0.95rem; }
+
+        .clock-display {
+            font-family: 'Orbitron', sans-serif; font-size: 1.8rem; color: #fff;
+            text-shadow: 0 0 10px var(--primary-glow); text-align: center;
+            margin-bottom: 15px; border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px; letter-spacing: 2px;
+        }
+        .clock-label { font-size: 0.7rem; color: #8fa3b0; letter-spacing: 1px; display: block; margin-top: -5px;}
+
+        .btn-back {
+            background: rgba(0, 212, 255, 0.1); border: 1px solid var(--primary-glow);
+            color: var(--primary-glow); padding: 10px; border-radius: 8px;
+            font-family: 'Orbitron', sans-serif; font-size: 0.85rem; cursor: pointer;
+            width: 100%; margin-top: 15px; transition: all 0.3s; letter-spacing: 1px;
+        }
+        .btn-back:hover {
+            background: var(--primary-glow); color: #000; box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        .controls-hint {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(0,212,255,0.2);
+            padding: 10px 20px; border-radius: 30px; font-family: 'Orbitron';
+            font-size: 0.8rem; color: #8fa3b0; z-index: 1000; pointer-events: none;
+            letter-spacing: 1px; display: flex; gap: 15px; align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        @media (max-width: 768px) {
+            #earth-data-panel {
+                top: auto; bottom: 0; left: 0; width: 100%;
+                border-radius: 25px 25px 0 0; padding: 1.5rem; box-sizing: border-box;
+                border-bottom: none; border-left: none; border-right: none;
+            }
+            .controls-hint { top: 20px; bottom: auto; width: max-content; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="starfield"></canvas>
+
+    <div id="telescope-loading">
+        <div class="reticle"></div>
+        <div class="loading-text">CONECTANDO AO MÓDULO ORBITAL</div>
+        <div class="loading-sub">SINCRONIZANDO COM A BASE DE DADOS DA NASA...</div>
+    </div>
+
+    <div id="canvas-container">
+        <model-viewer 
+            id="nasa-earth"
+            alt="A 3D model of Earth"
+            src="https://solarsystem.nasa.gov/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBaTBSIiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--7c1183d35fdc9e4b5143c8601376552b89b5d99f/Earth_1_12756.glb?disposition=inline"
+            ios-src="https://solarsystem.nasa.gov/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBaTRSIiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--46a65f6d8e039fc33416575466a91c03d137e4cd/Earth_1_12756.usdz"
+            camera-controls
+            auto-rotate
+            rotation-per-second="1deg"
+            interaction-prompt="none"
+            shadow-intensity="1"
+            exposure="1.2"
+            min-camera-orbit="auto auto 150%" 
+            max-camera-orbit="auto auto 400%">
+        </model-viewer>
+    </div>
+
+    <div id="earth-data-panel" class="ui-panel">
+        
+        <div class="clock-display" id="bsb-clock">
+            00:00:00
+            <span class="clock-label">TEMPO DE MISSÃO (UTC)</span>
+        </div>
+
+        <h1>MÓDULO ORBITAL</h1>
+        <h2>OBSERVAÇÃO EXTERNA</h2>
+        
+        <div class="data-row">
+            <span class="data-label">ALVO</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="data-value">PLANETA TERRA</span>
+                <span style="font-size: 1.2rem; filter: drop-shadow(0 0 5px #00ffaa);">🌍</span>
+            </div>
+        </div>
+        
+        <div class="data-row">
+            <span class="data-label">RENDERIZAÇÃO</span>
+            <span class="data-value" style="color: #00ffaa;">NASA GLB ENGINE</span>
+        </div>
+        
+        <div class="data-row">
+            <span class="data-label">ALTITUDE APROX.</span>
+            <span class="data-value">408 km (ISS)</span>
+        </div>
+
+        <div class="data-row">
+            <span class="data-label">STATUS</span>
+            <span class="data-value">EM ÓRBITA</span>
+        </div>
+
+        <button class="btn-back" onclick="window.location.href='index.html'">⬅ RETORNAR PARA A TERRA</button>
+    </div>
+
+    <div class="controls-hint">
+        <span>👆 ARRASTE PARA GIRAR</span> 
+        <span style="color:rgba(0,212,255,0.3);">|</span> 
+        <span>🔍 ROLE PARA ZOOM</span>
+    </div>
+
+    <script>
+        // --- 1. GERADOR DE ESTRELAS DE FUNDO ---
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height;
+        const stars = [];
+
+        function initStars() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            stars.length = 0;
+            // Cria 800 estrelas aleatórias
+            for(let i = 0; i < 800; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    radius: Math.random() * 1.5,
+                    alpha: Math.random(),
+                    // Velocidade de cintilação
+                    dAlpha: (Math.random() - 0.5) * 0.02 
+                });
+            }
+        }
+
+        function drawStars() {
+            ctx.clearRect(0, 0, width, height);
+            stars.forEach(s => {
+                // Faz a estrela pulsar (cintilar)
+                s.alpha += s.dAlpha;
+                if(s.alpha <= 0 || s.alpha >= 1) s.dAlpha = -s.dAlpha;
+                
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
+                ctx.fill();
+            });
+            requestAnimationFrame(drawStars);
+        }
+
+        initStars();
+        drawStars();
+
+        window.addEventListener('resize', initStars);
+
+        // --- 2. RELÓGIO DE MISSÃO (UTC) ---
+        function updateClock() {
+            const now = new Date();
+            // Como estamos no espaço, usamos UTC (Padrão espacial)
+            const timeString = now.toLocaleTimeString('en-GB', { timeZone: 'UTC' });
+            document.getElementById('bsb-clock').innerHTML = `${timeString} <span class="clock-label">TEMPO DE MISSÃO (UTC)</span>`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- 3. CONTROLE DO MODELO DA NASA ---
+        const modelViewer = document.getElementById('nasa-earth');
+        const loadingScreen = document.getElementById('telescope-loading');
+
+        // Quando o modelo 3D estiver 100% carregado
+        modelViewer.addEventListener('load', () => {
+            setTimeout(() => {
+                loadingScreen.style.opacity = '0';
+                setTimeout(() => {
+                    loadingScreen.style.display = 'none';
+                }, 800);
+            }, 500);
+        });
+
+        // Caso a rede caia e o modelo não carregue
+        modelViewer.addEventListener('error', () => {
+            document.querySelector('.loading-text').innerText = "FALHA DE CONEXÃO COM A NASA";
+            document.querySelector('.loading-text').style.color = "red";
+            document.querySelector('.reticle').style.borderColor = "red";
+            document.querySelector('.loading-sub').innerText = "Verifique sua conexão.";
+        });
+    </script>
+</body>
+</html>

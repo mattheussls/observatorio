@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Telescópio Lunar 3D</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        :root {
+            --primary-glow: #00d4ff;
+            --moon-glow: #f4f6f0;
+            --bg-deep: #050810;
+            --panel-bg: rgba(10, 15, 25, 0.85);
+            --border-color: rgba(0, 212, 255, 0.4);
+            --text-main: #e0e6ed;
+            --alert-color: #ffcc00;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: var(--bg-deep); color: var(--text-main);
+            font-family: 'Rajdhani', sans-serif; overflow: hidden;
+            user-select: none; overscroll-behavior: none;
+        }
+
+        /* O Canvas do 3D ocupa a tela toda */
+        #canvas-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
+            cursor: grab;
+        }
+        #canvas-container:active { cursor: grabbing; }
+
+        /* --- TELA DE CARREGAMENTO (AJUSTANDO TELESCÓPIO) --- */
+        #telescope-loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; transition: opacity 0.8s ease-out;
+        }
+        .reticle {
+            width: 80px; height: 80px; border: 2px dashed var(--primary-glow);
+            border-radius: 50%; position: relative; animation: spinReticle 4s linear infinite;
+            margin-bottom: 20px; box-shadow: 0 0 15px rgba(0,212,255,0.2);
+        }
+        .reticle::before, .reticle::after {
+            content: ''; position: absolute; background: var(--primary-glow);
+        }
+        .reticle::before { top: -10px; bottom: -10px; left: 50%; width: 2px; transform: translateX(-50%); }
+        .reticle::after { left: -10px; right: -10px; top: 50%; height: 2px; transform: translateY(-50%); }
+        
+        @keyframes spinReticle { 100% { transform: rotate(360deg); } }
+
+        .loading-text {
+            font-family: 'Orbitron', sans-serif; font-size: 1.2rem; color: var(--primary-glow);
+            letter-spacing: 3px; text-shadow: 0 0 10px var(--primary-glow);
+            animation: pulseText 1.5s infinite alternate; text-align: center;
+        }
+        .loading-sub {
+            font-size: 0.9rem; color: #8fa3b0; margin-top: 10px; letter-spacing: 1px;
+        }
+        @keyframes pulseText { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        /* --- PAINÉIS FLUTUANTES (Mesmo estilo do mapa estelar) --- */
+        .ui-panel {
+            position: absolute; background: var(--panel-bg); backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 12px;
+            padding: 1.5rem; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+            z-index: 1000; pointer-events: auto;
+        }
+
+        #moon-data-panel { top: 30px; left: 30px; width: 320px; }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif; font-size: 1.4rem; margin: 0 0 5px 0;
+            color: #fff; text-shadow: 0 0 10px var(--primary-glow); letter-spacing: 1px;
+        }
+        h2 {
+            font-size: 0.9rem; color: var(--primary-glow); margin: 0 0 15px 0;
+            letter-spacing: 2px; border-bottom: 1px dashed rgba(0,212,255,0.3); padding-bottom: 10px;
+        }
+
+        .data-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px; font-size: 1.05rem;
+        }
+        .data-label { color: #8fa3b0; font-weight: 600; letter-spacing: 0.5px; }
+        .data-value { color: #ffffff; text-shadow: 0 0 5px rgba(255,255,255,0.3); font-family: 'Orbitron', sans-serif; font-size: 0.95rem; }
+        
+        .phase-icon { font-size: 1.8rem; filter: drop-shadow(0 0 5px rgba(255,255,255,0.8)); }
+
+        /* Botão Voltar */
+        .btn-back {
+            background: rgba(0, 212, 255, 0.1); border: 1px solid var(--primary-glow);
+            color: var(--primary-glow); padding: 10px; border-radius: 8px;
+            font-family: 'Orbitron', sans-serif; font-size: 0.85rem; cursor: pointer;
+            width: 100%; margin-top: 15px; transition: all 0.3s; letter-spacing: 1px;
+        }
+        .btn-back:hover {
+            background: var(--primary-glow); color: #000; box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        /* Controles / Dicas */
+        .controls-hint {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(0,212,255,0.2);
+            padding: 10px 20px; border-radius: 30px; font-family: 'Orbitron';
+            font-size: 0.8rem; color: #8fa3b0; z-index: 1000; pointer-events: none;
+            letter-spacing: 1px; display: flex; gap: 15px; align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        /* OTIMIZAÇÃO MOBILE */
+        @media (max-width: 768px) {
+            #moon-data-panel {
+                top: auto; bottom: 0; left: 0; width: 100%;
+                border-radius: 25px 25px 0 0; padding: 1.5rem; box-sizing: border-box;
+                border-bottom: none; border-left: none; border-right: none;
+            }
+            .controls-hint { top: 20px; bottom: auto; width: max-content; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="telescope-loading">
+        <div class="reticle"></div>
+        <div class="loading-text">AJUSTANDO TELESCÓPIO</div>
+        <div class="loading-sub">CALIBRANDO LENTES PARA O ALVO: LUA...</div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="moon-data-panel" class="ui-panel">
+        <h1>LENTE LUNAR</h1>
+        <h2>TELEMETRIA EM TEMPO REAL</h2>
+        
+        <div class="data-row">
+            <span class="data-label">FASE ATUAL</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="data-value" id="lbl-phase-name">Calculando...</span>
+                <span class="phase-icon" id="lbl-phase-icon">🌑</span>
+            </div>
+        </div>
+        
+        <div class="data-row">
+            <span class="data-label">ILUMINAÇÃO SOLAR</span>
+            <span class="data-value" id="lbl-illumination" style="color: var(--alert-color);">--%</span>
+        </div>
+        
+        <div class="data-row">
+            <span class="data-label">IDADE LUNAR</span>
+            <span class="data-value" id="lbl-age">-- dias</span>
+        </div>
+
+        <div class="data-row" style="margin-top: 20px;">
+            <span class="data-label" style="font-size: 0.8rem;">DISTÂNCIA MÉDIA</span>
+            <span class="data-value" style="font-size: 0.8rem;">384.400 km</span>
+        </div>
+
+        <button class="btn-back" onclick="window.location.href='index.html'">⬅ VOLTAR AO MAPA ESTELAR</button>
+    </div>
+
+    <div class="controls-hint">
+        <span>👆 ARRASTE PARA GIRAR</span> 
+        <span style="color:rgba(0,212,255,0.3);">|</span> 
+        <span>🔍 PINÇA PARA ZOOM</span>
+    </div>
+
+    <script>
+        // --- 1. MATEMÁTICA ASTRONÔMICA: CÁLCULO DA FASE DA LUA EM TEMPO REAL ---
+        function calculateMoonData() {
+            const now = new Date();
+            // Ciclo lunar exato em dias
+            const lunarDays = 29.53058867;
+            // Uma data de Lua Nova conhecida (Ex: 6 de Jan de 2000)
+            const knownNewMoon = new Date('2000-01-06T18:14:00Z');
+            
+            const diffMs = now.getTime() - knownNewMoon.getTime();
+            const diffDays = diffMs / (1000 * 60 * 60 * 24);
+            
+            // Idade da lua no ciclo atual
+            const age = diffDays % lunarDays;
+            
+            // Fração do ciclo (0.0 a 1.0)
+            const fraction = age / lunarDays;
+
+            let phaseName = ""; let icon = "";
+            
+            if (age < 1.84) { phaseName = "Nova"; icon = "🌑"; }
+            else if (age < 5.53) { phaseName = "Crescente"; icon = "🌒"; }
+            else if (age < 9.22) { phaseName = "Quarto Crescente"; icon = "🌓"; }
+            else if (age < 12.91) { phaseName = "Crescente Gibosa"; icon = "🌔"; }
+            else if (age < 16.61) { phaseName = "Cheia"; icon = "🌕"; }
+            else if (age < 20.30) { phaseName = "Minguante Gibosa"; icon = "🌖"; }
+            else if (age < 23.99) { phaseName = "Quarto Minguante"; icon = "🌗"; }
+            else if (age < 27.68) { phaseName = "Minguante"; icon = "🌘"; }
+            else { phaseName = "Nova"; icon = "🌑"; }
+
+            // Cálculo da Iluminação (Porcentagem) baseada na curva de fase
+            const illumination = Math.round((0.5 * (1 - Math.cos(2 * Math.PI * fraction))) * 100);
+
+            // Atualiza o Painel
+            document.getElementById('lbl-phase-name').innerText = phaseName;
+            document.getElementById('lbl-phase-icon').innerText = icon;
+            document.getElementById('lbl-illumination').innerText = `${illumination}%`;
+            document.getElementById('lbl-age').innerText = `${age.toFixed(1)} dias`;
+        }
+        calculateMoonData();
+
+
+        // --- 2. MOTOR 3D: THREE.JS ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        
+        // Câmera
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5; // Posição ideal do telescópio
+
+        // Renderizador
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // Controles de câmera (Zoom e Rotação)
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enablePan = false; 
+        controls.enableDamping = true; 
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 2.0; 
+        controls.maxDistance = 10;  
+
+        // Iluminação
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.03); // Lado escuro não é 100% preto
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xfffff0, 1.5);
+        sunLight.position.set(5, 3, 5); // Luz batendo de lado para criar sombras dramáticas nas crateras
+        scene.add(sunLight);
+
+        // Fundo Estrelado
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.02, transparent: true, opacity: 0.8 });
+        const starsVertices = [];
+        for(let i = 0; i < 4000; i++) {
+            const x = (Math.random() - 0.5) * 200;
+            const y = (Math.random() - 0.5) * 200;
+            const z = (Math.random() - 0.5) * 200;
+            starsVertices.push(x, y, z);
+        }
+        starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+        const starField = new THREE.Points(starsGeometry, starsMaterial);
+        scene.add(starField);
+
+        // Criação da Lua
+        let moon;
+        const textureLoader = new THREE.TextureLoader();
+        const textureUrl = 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg';
+
+        textureLoader.load(
+            textureUrl,
+            function (texture) {
+                const geometry = new THREE.SphereGeometry(1.5, 64, 64);
+                
+                const material = new THREE.MeshStandardMaterial({
+                    map: texture,
+                    bumpMap: texture, // Relevo das crateras
+                    bumpScale: 0.02,
+                    roughness: 0.8,
+                    metalness: 0.1  
+                });
+
+                moon = new THREE.Mesh(geometry, material);
+                moon.rotation.y = Math.PI; // Vira o lado visível para a câmera
+                scene.add(moon);
+
+                // --- FIM DO CARREGAMENTO DO TELESCÓPIO ---
+                // Espera um tempinho extra só pro "charme" da animação
+                setTimeout(() => {
+                    const loadingScreen = document.getElementById('telescope-loading');
+                    loadingScreen.style.opacity = '0';
+                    setTimeout(() => loadingScreen.style.display = 'none', 800);
+                }, 1500);
+            },
+            undefined,
+            function (err) {
+                document.querySelector('.loading-text').innerText = "FALHA NO SENSOR ÓPTICO";
+                document.querySelector('.loading-text').style.color = "red";
+                document.querySelector('.reticle').style.borderColor = "red";
+            }
+        );
+
+        // Responsividade
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Loop de Animação
+        function animate() {
+            requestAnimationFrame(animate);
+            if (moon) {
+                moon.rotation.y += 0.0003; // Rotação bem suave
+            }
+            starField.rotation.y -= 0.00005; // Estrelas girando de fundo
+            controls.update(); 
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>

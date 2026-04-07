@@ -97,6 +97,22 @@
 
         .tracker-box { background: rgba(0,0,0,0.4); border: 1px dashed var(--primary-glow); border-radius: 8px; padding: 10px; margin-top: 5px; font-size: 0.9rem; }
 
+        /* --- BOTÕES DE NAVEGAÇÃO 3D (NOVOS) --- */
+        .module-btn-container {
+            display: flex; gap: 10px; margin-top: 5px;
+        }
+        .module-btn {
+            flex: 1; background: rgba(0, 212, 255, 0.1); border: 1px solid var(--primary-glow);
+            color: var(--primary-glow); padding: 10px; border-radius: 8px;
+            font-family: 'Orbitron', sans-serif; font-size: 0.75rem; cursor: pointer;
+            text-align: center; transition: all 0.3s; display: flex; flex-direction: column;
+            align-items: center; gap: 5px; letter-spacing: 1px;
+        }
+        .module-btn:hover {
+            background: var(--primary-glow); color: #000; box-shadow: 0 0 15px var(--primary-glow);
+        }
+        .module-btn-icon { font-size: 1.8rem; filter: drop-shadow(0 0 5px rgba(255,255,255,0.5)); }
+
         /* HUD DINÂMICO (TOPO) */
         #dynamic-hud {
             position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
@@ -183,7 +199,6 @@
             .hud-text { font-size: 0.9rem; }
             #weather-alert { top: 75px; width: 90%; flex-direction: column; text-align: center; }
             
-            /* Oculta o Mini-Mapa no celular para limpar a tela */
             #minimap-container { display: none; }
         }
     </style>
@@ -219,6 +234,20 @@
         <div class="clock-display" id="bsb-clock">
             00:00:00
             <span class="clock-label">HORÁRIO DE BRASÍLIA</span>
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">🚀 MÓDULOS DE OBSERVAÇÃO 3D</label>
+            <div class="module-btn-container">
+                <button class="module-btn" onclick="window.location.href='moon.html'">
+                    <span class="module-btn-icon">🌙</span>
+                    LENTE LUNAR
+                </button>
+                <button class="module-btn" onclick="window.location.href='earth.html'">
+                    <span class="module-btn-icon">🌍</span>
+                    ÓRBITA TERRESTRE
+                </button>
+            </div>
         </div>
         
         <div class="control-group">
@@ -548,7 +577,7 @@
                         astroData.issAlert = "A ISS está cruzando os céus agora!";
                         planetariumInstance.addPointer({ ra: raRad*180/Math.PI, dec: decRad*180/Math.PI, label: '🛰️ ', colour: '#00ff88' });
                     } else {
-                        statusEl.innerHTML = `<span style="color: #8fa3b0;">OCULTA</span> (No outro lado do mundo)`;
+                        statusEl.innerHTML = `<span style="color: #8fa3b0;">OCULTA</span> (Fora do campo de visão)`;
                         astroData.issAlert = ""; 
                     }
                     planetariumInstance.draw();
